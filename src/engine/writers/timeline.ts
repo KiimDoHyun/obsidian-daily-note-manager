@@ -45,7 +45,7 @@ export async function upsertTimelineSection(
   await vault.write(summaryP, next);
 }
 
-async function collectTimelineItems(
+export async function collectTimelineItems(
   month: Date,
   vault: VaultAdapter,
   settings: DailyNoteSettings,
