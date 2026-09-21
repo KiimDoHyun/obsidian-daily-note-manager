@@ -66,6 +66,11 @@ export class TimelineView extends ItemView {
     this.contentEl.empty();
   }
 
+  /** 외부(플러그인 설정 저장, 리본 재클릭 등)에서 강제 재렌더링. */
+  async forceRerender(): Promise<void> {
+    await this.rerender();
+  }
+
   private async rerender(): Promise<void> {
     this.locale = resolveLocale(this.plugin.settings.language);
     const vault = new VaultAdapter(this.app);
@@ -212,8 +217,8 @@ export class TimelineView extends ItemView {
         bar.addEventListener("mouseleave", () => this.hideTooltip());
         rowGroup.appendChild(bar);
 
-        const duration = this.durationText(item);
-        if (duration && w >= 28) {
+        const duration = this.durationDisplay(item, w);
+        if (duration) {
           const dur = svgEl("text");
           dur.classList.add("dnm-duration");
           dur.setAttribute("x", String(x + w / 2));
@@ -414,6 +419,31 @@ export class TimelineView extends ItemView {
   private durationText(item: TimelineItem): string {
     const n = businessDaysInSpan(item.start, item.end);
     return durationLabel(n, item.status, this.locale);
+  }
+
+  /**
+   * 막대 폭에 맞춰 소요일 텍스트를 결정.
+   * 폭에 여유 있으면 full ("Same day", "Day 4", "4일째"),
+   * 좁으면 short ("1d", "4d", "4일"), 그것도 안 맞으면 빈 문자열.
+   */
+  private durationDisplay(item: TimelineItem, barWidth: number): string {
+    const n = businessDaysInSpan(item.start, item.end);
+    const full = durationLabel(n, item.status, this.locale);
+    if (this.estimateTextWidth(full) + 8 <= barWidth) return full;
+    const short = this.locale === "ko" ? `${n}일` : `${n}d`;
+    if (this.estimateTextWidth(short) + 8 <= barWidth) return short;
+    return "";
+  }
+
+  /** SVG text 폭 추정. 한글 11px, 그 외 7px 기준 (font-size 11 500 weight). */
+  private estimateTextWidth(text: string): number {
+    let w = 0;
+    for (const ch of text) {
+      if (/[ㄱ-ㆎ가-힣]/.test(ch)) w += 11; // Hangul
+      else if (ch === " ") w += 3.5;
+      else w += 7;
+    }
+    return w;
   }
 
   private showTooltip(item: TimelineItem, evt: MouseEvent): void {

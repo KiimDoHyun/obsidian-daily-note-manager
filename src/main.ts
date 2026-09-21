@@ -56,17 +56,31 @@ export default class DailyNoteManagerPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     this.engine.updateSettings(this.settings);
+    this.rerenderOpenTimelineViews();
   }
 
   async activateTimelineView(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(TIMELINE_VIEW_TYPE);
     let leaf: WorkspaceLeaf | null;
+    let reused = false;
     if (existing.length > 0) {
       leaf = existing[0];
+      reused = true;
     } else {
       leaf = this.app.workspace.getRightLeaf(false);
       if (leaf) await leaf.setViewState({ type: TIMELINE_VIEW_TYPE, active: true });
     }
-    if (leaf) this.app.workspace.revealLeaf(leaf);
+    if (leaf) {
+      this.app.workspace.revealLeaf(leaf);
+      if (reused && leaf.view instanceof TimelineView) {
+        void leaf.view.forceRerender();
+      }
+    }
+  }
+
+  private rerenderOpenTimelineViews(): void {
+    this.app.workspace.getLeavesOfType(TIMELINE_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view instanceof TimelineView) void leaf.view.forceRerender();
+    });
   }
 }
