@@ -46,6 +46,49 @@ export class DailyNoteSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * Obsidian 1.13+ 선언형 설정 API.
+   * - 값 저장은 Obsidian 이 자동 처리(this.plugin.settings[key] 를 직접 수정 + saveData 호출).
+   * - Plugin.saveData 를 override 해서 열린 타임라인 뷰 갱신 side effect 를 태움.
+   * - 언어 라벨은 현재 locale 로 렌더. 언어 변경 시 라벨은 설정 탭을 다시 열면 갱신됨.
+   * 이 메서드가 비어있지 않은 배열을 반환하면 1.13+ 에서는 display() 가 무시되고 이 정의가 UI 와
+   * 설정 검색에 함께 쓰인다. 이전 버전(1.7.2~1.12) 사용자용으로 display() 도 함께 유지.
+   */
+  getSettingDefinitions() {
+    const lc = resolveLocale(this.plugin.settings.language);
+    return [
+      { name: t("setSubdirName", lc), desc: t("setSubdirDesc", lc),
+        control: { type: "text" as const, key: "notesSubdir", placeholder: "Notes" } },
+      { name: t("setDropThresholdName", lc), desc: t("setDropThresholdDesc", lc),
+        control: { type: "number" as const, key: "dropThresholdDays", min: 1 } },
+      { name: t("setWarnRedName", lc), desc: t("setWarnRedDesc", lc),
+        control: { type: "number" as const, key: "warnRedDaysBeforeDrop", min: 0 } },
+      { name: t("setWarnOrangeName", lc), desc: t("setWarnOrangeDesc", lc),
+        control: { type: "number" as const, key: "warnOrangeDaysBeforeDrop", min: 0 } },
+      { name: t("setArchiveFilenameName", lc), desc: t("setArchiveFilenameDesc", lc),
+        control: { type: "text" as const, key: "archiveFileName", placeholder: "보관함.md" } },
+      { name: t("setSummarySuffixName", lc), desc: t("setSummarySuffixDesc", lc),
+        control: { type: "text" as const, key: "monthlySummarySuffix", placeholder: "종합" } },
+      { name: t("setDropSuffixName", lc), desc: t("setDropSuffixDesc", lc),
+        control: { type: "text" as const, key: "monthlyDropSuffix", placeholder: "드롭" } },
+      { name: t("setSkipWeekendName", lc), desc: t("setSkipWeekendDesc", lc),
+        control: { type: "toggle" as const, key: "skipWeekend" } },
+      { name: t("setAutoLoadName", lc), desc: t("setAutoLoadDesc", lc),
+        control: { type: "toggle" as const, key: "autoRunOnLoad" } },
+      { name: t("setMaxCatchupName", lc), desc: t("setMaxCatchupDesc", lc),
+        control: { type: "number" as const, key: "maxCatchUpDays", min: 1 } },
+      { name: t("setLangName", lc), desc: t("setLangDesc", lc),
+        control: {
+          type: "dropdown" as const,
+          key: "language",
+          options: { auto: t("setLangAuto", lc), en: "English", ko: "한국어" },
+        } },
+    ];
+  }
+
+  /**
+   * 1.12 이하 fallback UI. 1.13+ 에서는 getSettingDefinitions() 가 우선 적용되어 이 메서드는 호출되지 않는다.
+   */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -192,9 +235,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
             const previous = this.plugin.settings.language;
             this.plugin.settings.language = value as DailyNoteSettings["language"];
             await this.plugin.saveSettings();
-            // 설정 탭 자체를 다시 그려서 라벨 언어 갱신
-            this.display();
             if (previous !== value) {
+              // 라벨은 설정 탭 재진입 시 갱신됨을 알림.
               new Notice(t("noticeLanguageChanged", resolveLocale(this.plugin.settings.language)));
             }
           }),

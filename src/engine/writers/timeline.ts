@@ -1,4 +1,4 @@
-import { addDays, mmddOf, sameYearMonth, toIsoDate, today as todayDate, ymOf } from "../dateutil";
+import { addDays, sameYearMonth, toIsoDate, today as todayDate, ymOf } from "../dateutil";
 import { parseDailyNoteText } from "../parser";
 import { dailyNotePath, monthlySummaryPath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";

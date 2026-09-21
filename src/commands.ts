@@ -145,7 +145,7 @@ class DatePromptModal extends Modal {
   constructor(
     app: App,
     plugin: DailyNoteManagerPlugin,
-    private onSubmit: (iso: string) => void,
+    private onSubmit: (iso: string) => void | Promise<void>,
   ) {
     super(app);
     this.locale = resolveLocale(plugin.settings.language);
@@ -175,7 +175,7 @@ class DatePromptModal extends Modal {
             return;
           }
           this.close();
-          this.onSubmit(this.value);
+          void this.onSubmit(this.value);
         }),
     );
   }

@@ -46,7 +46,8 @@ export class VaultAdapter implements VaultLike {
 
   async remove(path: string): Promise<void> {
     const f = this.app.vault.getAbstractFileByPath(this.norm(path));
-    if (f instanceof TFile) await this.app.vault.delete(f);
+    // trashFile 은 사용자의 "삭제 시 동작" 설정(휴지통/영구 삭제)을 존중.
+    if (f instanceof TFile) await this.app.fileManager.trashFile(f);
   }
 
   async ensureFolder(path: string): Promise<void> {

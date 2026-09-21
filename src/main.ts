@@ -29,7 +29,7 @@ export default class DailyNoteManagerPlugin extends Plugin {
     this.registerView(TIMELINE_VIEW_TYPE, (leaf) => new TimelineView(leaf, this));
 
     this.addRibbonIcon("calendar-clock", t("ribbonOpenTimeline", locale), () => {
-      this.activateTimelineView();
+      void this.activateTimelineView();
     });
 
     this.addCommand({
@@ -53,13 +53,21 @@ export default class DailyNoteManagerPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) as Partial<DailyNoteSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
-    this.engine.updateSettings(this.settings);
-    this.rerenderOpenTimelineViews();
+  }
+
+  /**
+   * Obsidian 1.13+ 의 선언형 설정 API 가 saveData 를 직접 호출할 때 우리 side effect 도 태우기 위해 override.
+   * 값 저장 후 열려 있는 타임라인 뷰를 즉시 갱신해 UX 일관성 유지.
+   */
+  async saveData(data: unknown): Promise<void> {
+    await super.saveData(data);
+    if (this.engine) this.rerenderOpenTimelineViews();
   }
 
   async activateTimelineView(): Promise<void> {
@@ -74,7 +82,7 @@ export default class DailyNoteManagerPlugin extends Plugin {
       if (leaf) await leaf.setViewState({ type: TIMELINE_VIEW_TYPE, active: true });
     }
     if (leaf) {
-      this.app.workspace.revealLeaf(leaf);
+      await this.app.workspace.revealLeaf(leaf);
       if (reused && leaf.view instanceof TimelineView) {
         void leaf.view.forceRerender();
       }

@@ -9,7 +9,7 @@ import { resolveOriginDate } from "./dateutil";
 import type { DailyNoteParsed, TaskBlock } from "./types";
 import { makeBlock } from "./types";
 
-const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x\-])\] (?<text>.*)$/;
+const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x-])\] (?<text>.*)$/;
 
 const CARRYOVER_TAG_RE =
   /\s*\((?<days>\d+)일째 이월, (?<mm>\d{2})-(?<dd>\d{2})~\)(\s*\(드롭 예정입니다\))?\s*$/;

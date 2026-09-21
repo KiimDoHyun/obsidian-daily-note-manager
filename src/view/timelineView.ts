@@ -198,7 +198,7 @@ export class TimelineView extends ItemView {
       this.registerDomEvent(labelDiv, "mouseenter", (e) => this.showTooltip(item, e));
       this.registerDomEvent(labelDiv, "mousemove", (e) => this.positionTooltip(e));
       this.registerDomEvent(labelDiv, "mouseleave", () => this.hideTooltip());
-      this.registerDomEvent(labelDiv, "click", () => this.openDailyNoteFor(item));
+      this.registerDomEvent(labelDiv, "click", () => { void this.openDailyNoteFor(item); });
 
       // 차트 row 그룹
       const rowGroup = svgEl("g");
@@ -229,9 +229,9 @@ export class TimelineView extends ItemView {
         bar.setAttribute("height", String(BAR_HEIGHT));
         bar.setAttribute("rx", "3");
         bar.setAttribute("fill", this.colorFor(item.status));
-        bar.addEventListener("click", () => this.openDailyNoteFor(item));
-        bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
-        bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
+        bar.addEventListener("click", () => { void this.openDailyNoteFor(item); });
+        bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e));
+        bar.addEventListener("mousemove", (e) => this.positionTooltip(e));
         bar.addEventListener("mouseleave", () => this.hideTooltip());
         rowGroup.appendChild(bar);
 

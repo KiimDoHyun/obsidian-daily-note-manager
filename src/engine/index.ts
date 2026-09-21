@@ -20,7 +20,6 @@ import {
   appendEvent as appendSummaryEvent,
   ensureSummary,
   recomputeHeader,
-  type SummaryEventType,
 } from "./writers/monthlySummary";
 import { upsertTimelineSection } from "./writers/timeline";
 
@@ -237,14 +236,14 @@ export class Engine {
       const dropPath = await ensureDrop(prevDate, this.vault, this.settings);
       for (const block of events.dropped) {
         await appendDropped(dropPath, prevDate, block, this.vault);
-        await appendSummaryEvent(summaryPath, "dropped" as SummaryEventType, prevDate, block, this.vault);
+        await appendSummaryEvent(summaryPath, "dropped", prevDate, block, this.vault);
       }
     }
     if (events.archived.length > 0) {
       const arcPath = await ensureArchive(this.vault, this.settings);
       for (const block of events.archived) {
         await appendArchived(arcPath, prevDate, block, this.vault);
-        await appendSummaryEvent(summaryPath, "archived" as SummaryEventType, prevDate, block, this.vault);
+        await appendSummaryEvent(summaryPath, "archived", prevDate, block, this.vault);
       }
     }
   }
