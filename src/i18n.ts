@@ -114,10 +114,12 @@ const M = {
   },
 
   // Settings
-  setLangName: { ko: "언어", en: "Language" },
+  setLangName: { ko: "언어 / Language", en: "Language / 언어" },
   setLangDesc: {
-    ko: "플러그인 UI 언어. Auto 는 시스템에서 감지.",
-    en: "Plugin UI language. Auto detects from system locale.",
+    ko:
+      "이 플러그인은 한국어 워크플로 기반으로 설계됐습니다. 언어 설정은 UI(리본 툴팁·명령어·알림·설정 라벨·타임라인 뷰)만 전환하며, 생성되는 노트 파일 내용(섹션 헤더, 이월 접미사 등)은 언제나 한국어 포맷을 유지합니다.",
+    en:
+      "This plugin is designed around a Korean daily-note workflow. The language setting only translates the UI (ribbon tooltip, commands, notices, settings labels, timeline view). Generated note contents (section headers, carryover suffixes, monthly summary, etc.) always stay in Korean format.",
   },
   setLangAuto: { ko: "Auto (시스템)", en: "Auto (system)" },
   setSubdirName: { ko: "노트 하위 폴더", en: "Notes subfolder" },

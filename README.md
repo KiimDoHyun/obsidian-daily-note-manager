@@ -103,6 +103,7 @@ Under Settings → Community plugins → Daily Note Manager:
 - Warning threshold in business days (default 3)
 - Skip weekend on/off
 - Max catch-up days on app load (default 14)
+- **Language / 언어** — UI language (ribbon, commands, notices, settings labels, timeline view). Note file contents (section headers, carryover suffixes, monthly summary, etc.) always stay in Korean format regardless of this setting.
 
 ## Commands
 
@@ -239,6 +240,7 @@ Notes/
 - 경고 임계일 (기본 3영업일)
 - 주말 스킵 여부
 - 앱 로드 시 catch-up 최대 일수 (기본 14일)
+- **언어 / Language** — UI(리본·명령·알림·설정 라벨·타임라인 뷰) 언어. 노트 파일 내용(섹션 헤더·이월 접미사·월간 종합 등)은 이 설정과 무관하게 항상 한국어 포맷.
 
 ## 명령어
 
