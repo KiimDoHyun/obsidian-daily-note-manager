@@ -182,7 +182,12 @@
 
 .dnm-duration {
   fill: white;
-  font-weight: 500;
+  /* 빗금(주말 오버레이) 위에서도 뚜렷하게 보이도록 어두운 outline 추가.
+     paint-order: stroke → stroke 가 fill 뒤에 그려짐 → 흰 fill 이 앞, 어두운 stroke 이 살짝 드러나 outline 효과. */
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2.5px;
+  paint-order: stroke fill;
+  font-weight: 600;
   pointer-events: none;
   user-select: none;
 }

@@ -416,14 +416,14 @@ export class TimelineView extends ItemView {
     const defs = svgEl("defs");
     const pattern = svgEl("pattern");
     pattern.setAttribute("id", "dnm-weekend-stripes");
-    pattern.setAttribute("width", "6");
-    pattern.setAttribute("height", "6");
+    pattern.setAttribute("width", "7");
+    pattern.setAttribute("height", "7");
     pattern.setAttribute("patternUnits", "userSpaceOnUse");
     pattern.setAttribute("patternTransform", "rotate(-45)");
 
     const bg = svgEl("rect");
-    bg.setAttribute("width", "6");
-    bg.setAttribute("height", "6");
+    bg.setAttribute("width", "7");
+    bg.setAttribute("height", "7");
     bg.setAttribute("fill", "rgba(255,255,255,0)");
     pattern.appendChild(bg);
 
@@ -431,9 +431,9 @@ export class TimelineView extends ItemView {
     line.setAttribute("x1", "0");
     line.setAttribute("y1", "0");
     line.setAttribute("x2", "0");
-    line.setAttribute("y2", "6");
-    line.setAttribute("stroke", "rgba(255,255,255,0.5)");
-    line.setAttribute("stroke-width", "3");
+    line.setAttribute("y2", "7");
+    line.setAttribute("stroke", "rgba(255,255,255,0.75)");
+    line.setAttribute("stroke-width", "3.5");
     pattern.appendChild(line);
 
     defs.appendChild(pattern);
