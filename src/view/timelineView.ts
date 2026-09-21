@@ -642,5 +642,5 @@ export class TimelineView extends ItemView {
 }
 
 function svgEl<K extends keyof SVGElementTagNameMap>(name: K): SVGElementTagNameMap[K] {
-  return document.createElementNS("http://www.w3.org/2000/svg", name);
+  return createSvg(name);
 }
