@@ -110,6 +110,19 @@
   background: var(--background-modifier-hover);
 }
 
+/* 좌·우 컬럼 사이 드래그 핸들 */
+.dnm-drag-handle {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: var(--background-modifier-border);
+  transition: background 0.1s ease;
+}
+.dnm-drag-handle:hover,
+.dnm-drag-handle:active {
+  background: var(--interactive-accent);
+}
+
 /* 우측 차트 컬럼 (가로 스크롤) */
 .dnm-chart-col {
   flex: 1;

@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type DailyNoteManagerPlugin from "./main";
+import type { LocaleSetting } from "./i18n";
 
 export interface DailyNoteSettings {
   notesSubdir: string;
@@ -12,6 +13,10 @@ export interface DailyNoteSettings {
   autoRunOnLoad: boolean;
   skipWeekend: boolean;
   maxCatchUpDays: number;
+  /** UI 언어. auto 는 navigator.language 로 감지. */
+  language: LocaleSetting;
+  /** 타임라인 뷰 좌측 라벨 컬럼 폭 (px). 사용자가 드래그로 변경 가능. */
+  timelineLabelWidth: number;
 }
 
 export const DEFAULT_SETTINGS: DailyNoteSettings = {
@@ -25,6 +30,8 @@ export const DEFAULT_SETTINGS: DailyNoteSettings = {
   autoRunOnLoad: true,
   skipWeekend: true,
   maxCatchUpDays: 14,
+  language: "auto",
+  timelineLabelWidth: 220,
 };
 
 export class DailyNoteSettingTab extends PluginSettingTab {
@@ -153,6 +160,21 @@ export class DailyNoteSettingTab extends PluginSettingTab {
               this.plugin.settings.maxCatchUpDays = n;
               await this.plugin.saveSettings();
             }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Language / 언어")
+      .setDesc("Timeline view UI language. Auto detects from system locale.")
+      .addDropdown((drop) =>
+        drop
+          .addOption("auto", "Auto (system)")
+          .addOption("en", "English")
+          .addOption("ko", "한국어")
+          .setValue(this.plugin.settings.language)
+          .onChange(async (value) => {
+            this.plugin.settings.language = value as DailyNoteSettings["language"];
+            await this.plugin.saveSettings();
           }),
       );
   }

@@ -13,6 +13,14 @@ import {
 import { dailyNotePath } from "../engine/paths";
 import { VaultAdapter } from "../engine/vault";
 import { collectTimelineItems, type TimelineItem } from "../engine/writers/timeline";
+import {
+  dayOfWeekChar,
+  durationLabel,
+  rangeLabel,
+  resolveLocale,
+  t,
+  type Locale,
+} from "../i18n";
 
 export const TIMELINE_VIEW_TYPE = "daily-note-timeline-view";
 
@@ -21,16 +29,18 @@ const COLOR_DONE = "#22c55e";
 const COLOR_DROPPED = "#9ca3af";
 const COLOR_TODAY = "#ef4444";
 
-const LABEL_WIDTH = 220;
 const DAY_WIDTH = 32;
 const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 28;
 const BAR_HEIGHT = 18;
 const SECTION_GAP = 8;
+const LABEL_WIDTH_MIN = 100;
+const LABEL_WIDTH_MAX = 600;
 
 export class TimelineView extends ItemView {
   private currentMonth: Date;
   private tooltipEl: HTMLDivElement | null = null;
+  private locale: Locale = "en";
 
   constructor(leaf: WorkspaceLeaf, private plugin: DailyNoteManagerPlugin) {
     super(leaf);
@@ -41,7 +51,8 @@ export class TimelineView extends ItemView {
     return TIMELINE_VIEW_TYPE;
   }
   getDisplayText(): string {
-    return `업무 타임라인 (${ymOf(this.currentMonth)})`;
+    const label = this.locale === "ko" ? "업무 타임라인" : "Task Timeline";
+    return `${label} (${ymOf(this.currentMonth)})`;
   }
   getIcon(): string {
     return "calendar-clock";
@@ -56,6 +67,7 @@ export class TimelineView extends ItemView {
   }
 
   private async rerender(): Promise<void> {
+    this.locale = resolveLocale(this.plugin.settings.language);
     const vault = new VaultAdapter(this.app);
     const items = await collectTimelineItems(this.currentMonth, vault, this.plugin.settings);
     this.contentEl.empty();
@@ -75,7 +87,7 @@ export class TimelineView extends ItemView {
       await this.rerender();
     };
 
-    const label = bar.createEl("span", { text: ymOf(this.currentMonth), cls: "dnm-ym" });
+    bar.createEl("span", { text: ymOf(this.currentMonth), cls: "dnm-ym" });
 
     const next = bar.createEl("button", { text: "▶" });
     next.onclick = async () => {
@@ -83,15 +95,15 @@ export class TimelineView extends ItemView {
       await this.rerender();
     };
 
-    const today = bar.createEl("button", { text: "오늘" });
-    today.onclick = async () => {
+    const todayBtn = bar.createEl("button", { text: t("toolbarToday", this.locale) });
+    todayBtn.onclick = async () => {
       this.currentMonth = firstOfMonth(todayDate());
       await this.rerender();
     };
 
     bar.createDiv({ cls: "dnm-spacer" });
 
-    const refresh = bar.createEl("button", { text: "↻ 새로고침" });
+    const refresh = bar.createEl("button", { text: t("toolbarRefresh", this.locale) });
     refresh.onclick = () => this.rerender();
   }
 
@@ -103,20 +115,17 @@ export class TimelineView extends ItemView {
       swatch.style.background = color;
       wrap.createSpan({ text: label });
     };
-    item(COLOR_ACTIVE, "진행중");
-    item(COLOR_DONE, "완료");
-    item(COLOR_DROPPED, "드롭");
-    legend.createSpan({
-      text: "· 막대 클릭 시 시작일 데일리 노트로 이동",
-      cls: "dnm-legend-hint",
-    });
+    item(COLOR_ACTIVE, t("legendActive", this.locale));
+    item(COLOR_DONE, t("legendDone", this.locale));
+    item(COLOR_DROPPED, t("legendDropped", this.locale));
+    legend.createSpan({ text: t("legendHint", this.locale), cls: "dnm-legend-hint" });
   }
 
   private renderChart(items: TimelineItem[]): void {
     const wrap = this.contentEl.createDiv({ cls: "dnm-chart-wrap" });
 
     if (items.length === 0) {
-      wrap.createEl("p", { text: "이번 달 이벤트가 없습니다.", cls: "dnm-empty" });
+      wrap.createEl("p", { text: t("emptyMonth", this.locale), cls: "dnm-empty" });
       return;
     }
 
@@ -129,12 +138,16 @@ export class TimelineView extends ItemView {
     const chartWidth = daysInMonth * DAY_WIDTH;
     const chartTotalHeight = HEADER_HEIGHT + totalRowsHeight;
 
-    // 좌: 라벨 컬럼 (가로 스크롤 영향 없음)
+    // 좌: 라벨 컬럼 (가로 스크롤 영향 없음, 사용자 리사이즈 가능)
     const labelsCol = wrap.createDiv({ cls: "dnm-labels-col" });
-    labelsCol.style.width = `${LABEL_WIDTH}px`;
+    labelsCol.style.width = `${this.plugin.settings.timelineLabelWidth}px`;
     const labelsHeader = labelsCol.createDiv({ cls: "dnm-labels-header" });
     labelsHeader.style.height = `${HEADER_HEIGHT}px`;
     const labelsBody = labelsCol.createDiv({ cls: "dnm-labels-body" });
+
+    // 드래그 핸들
+    const handle = wrap.createDiv({ cls: "dnm-drag-handle" });
+    this.setupDragHandle(handle, labelsCol);
 
     // 우: 차트 (가로 스크롤)
     const chartCol = wrap.createDiv({ cls: "dnm-chart-col" });
@@ -152,16 +165,21 @@ export class TimelineView extends ItemView {
     sorted.forEach((item, idx) => {
       const y = HEADER_HEIGHT + rowLayout[idx].y;
 
-      // 라벨
+      // 라벨 — CSS ellipsis 로 오버플로 처리 (컬럼 폭 조정 시 자동 반영)
       const labelDiv = labelsBody.createDiv({ cls: "dnm-row-label" });
       labelDiv.style.height = `${ROW_HEIGHT}px`;
       if (rowLayout[idx].extraTop > 0) {
         labelDiv.style.marginTop = `${rowLayout[idx].extraTop}px`;
       }
-      labelDiv.setAttr("title", item.name);
-      labelDiv.setText(this.truncate(item.name, 24));
+      labelDiv.setAttr("title", item.name); // 브라우저 native tooltip (fallback)
+      labelDiv.setText(item.name);
+      labelDiv.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
+      labelDiv.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
+      labelDiv.addEventListener("mouseleave", () => this.hideTooltip());
+      labelDiv.addEventListener("click", () => this.openDailyNoteFor(item));
+      labelDiv.style.cursor = "pointer";
 
-      // 차트 row 그룹 (bg + bar)
+      // 차트 row 그룹
       const rowGroup = svgEl("g");
       rowGroup.classList.add("dnm-row");
       svg.appendChild(rowGroup);
@@ -194,7 +212,6 @@ export class TimelineView extends ItemView {
         bar.addEventListener("mouseleave", () => this.hideTooltip());
         rowGroup.appendChild(bar);
 
-        // 소요일 텍스트. 막대가 너무 좁으면 생략.
         const duration = this.durationText(item);
         if (duration && w >= 28) {
           const dur = svgEl("text");
@@ -208,7 +225,6 @@ export class TimelineView extends ItemView {
         }
       }
 
-      // hover 동기화 (label ↔ svg row)
       const setHover = (on: boolean) => {
         labelDiv.classList.toggle("dnm-hovered", on);
         rowGroup.classList.toggle("dnm-hovered", on);
@@ -217,6 +233,30 @@ export class TimelineView extends ItemView {
       labelDiv.addEventListener("mouseleave", () => setHover(false));
       rowGroup.addEventListener("mouseenter", () => setHover(true));
       rowGroup.addEventListener("mouseleave", () => setHover(false));
+    });
+  }
+
+  private setupDragHandle(handle: HTMLElement, labelsCol: HTMLElement): void {
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = labelsCol.offsetWidth;
+      document.body.style.cursor = "col-resize";
+
+      const onMove = (evt: MouseEvent) => {
+        const delta = evt.clientX - startX;
+        const w = Math.max(LABEL_WIDTH_MIN, Math.min(LABEL_WIDTH_MAX, startWidth + delta));
+        labelsCol.style.width = `${w}px`;
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        this.plugin.settings.timelineLabelWidth = labelsCol.offsetWidth;
+        void this.plugin.saveSettings();
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
     });
   }
 
@@ -264,11 +304,6 @@ export class TimelineView extends ItemView {
     }
   }
 
-  /**
-   * 주말 블록을 감싸는 세로 구분선.
-   * 토요일의 왼쪽 경계 + 일요일의 오른쪽 경계에 옅은 빨간선을 그림.
-   * 월 경계로 인해 짝이 안 맞는 경우(월초 일요일, 월말 토요일)도 정상 처리.
-   */
   private drawWeekendBorders(
     svg: SVGSVGElement,
     first: Date,
@@ -287,8 +322,8 @@ export class TimelineView extends ItemView {
     for (let d = 1; d <= daysInMonth; d++) {
       const day = new Date(first.getFullYear(), first.getMonth(), d);
       const dow = day.getDay();
-      if (dow === 6) draw((d - 1) * DAY_WIDTH); // 토요일 왼쪽
-      if (dow === 0) draw(d * DAY_WIDTH); // 일요일 오른쪽
+      if (dow === 6) draw((d - 1) * DAY_WIDTH);
+      if (dow === 0) draw(d * DAY_WIDTH);
     }
   }
 
@@ -303,7 +338,7 @@ export class TimelineView extends ItemView {
       dayLabel.setAttribute("y", "16");
       dayLabel.setAttribute("text-anchor", "middle");
       dayLabel.setAttribute("font-size", "10");
-      dayLabel.textContent = "일월화수목금토"[day.getDay()];
+      dayLabel.textContent = dayOfWeekChar(day.getDay(), this.locale);
       svg.appendChild(dayLabel);
 
       const dateLabel = svgEl("text");
@@ -347,7 +382,7 @@ export class TimelineView extends ItemView {
     label.setAttribute("y", "12");
     label.setAttribute("fill", COLOR_TODAY);
     label.setAttribute("font-size", "10");
-    label.textContent = "오늘";
+    label.textContent = t("todayLabel", this.locale);
     svg.appendChild(label);
   }
 
@@ -370,21 +405,15 @@ export class TimelineView extends ItemView {
     return COLOR_DROPPED;
   }
 
-  private truncate(s: string, max: number): string {
-    if (s.length <= max) return s;
-    return s.slice(0, max - 1) + "…";
-  }
-
-  private rangeText(item: TimelineItem): string {
-    if (item.start.getTime() === item.end.getTime()) return `${toIsoDate(item.start)} (당일)`;
-    return `${toIsoDate(item.start)} ~ ${toIsoDate(item.end)}`;
+  private sectionLabel(section: TimelineItem["section"]): string {
+    if (section === "진행중") return t("sectionActive", this.locale);
+    if (section === "완료") return t("sectionDone", this.locale);
+    return t("sectionDropped", this.locale);
   }
 
   private durationText(item: TimelineItem): string {
     const n = businessDaysInSpan(item.start, item.end);
-    if (n <= 1) return "당일";
-    if (item.status === "active") return `${n}일째`;
-    return `${n}일`;
+    return durationLabel(n, item.status, this.locale);
   }
 
   private showTooltip(item: TimelineItem, evt: MouseEvent): void {
@@ -397,18 +426,20 @@ export class TimelineView extends ItemView {
 
     const meta = el.createDiv({ cls: "dnm-tt-meta" });
     const sectionMark = item.section === "진행중" ? "🔵" : item.section === "완료" ? "🟢" : "⚫";
-    meta.setText(`${sectionMark} ${item.section} · ${this.durationText(item)} · ${this.rangeText(item)}`);
+    meta.setText(
+      `${sectionMark} ${this.sectionLabel(item.section)} · ${this.durationText(item)} · ${rangeLabel(toIsoDate(item.start), toIsoDate(item.end), this.locale)}`,
+    );
 
     if (item.children.length > 0) {
       const pre = el.createEl("pre", { cls: "dnm-tt-children" });
       pre.setText(item.children.map((l) => l.replace(/\t/g, "    ")).join("\n"));
     } else if (item.section !== "진행중") {
       const empty = el.createDiv({ cls: "dnm-tt-empty" });
-      empty.setText("하위 항목 없음");
+      empty.setText(t("noChildren", this.locale));
     }
 
     const hint = el.createDiv({ cls: "dnm-tt-hint" });
-    hint.setText("클릭하면 시작일 데일리 노트로 이동");
+    hint.setText(t("clickHint", this.locale));
 
     el.style.display = "block";
     this.positionTooltip(evt);
