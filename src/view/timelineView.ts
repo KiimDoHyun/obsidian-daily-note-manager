@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import type DailyNoteManagerPlugin from "../main";
 import {
   addDays,
-  businessDaysBetween,
+  businessDaysInSpan,
   firstOfMonth,
   isWeekend,
   lastOfMonth,
@@ -142,6 +142,7 @@ export class TimelineView extends ItemView {
     chartCol.appendChild(svg);
 
     this.drawWeekendBackgrounds(svg, first, daysInMonth, chartTotalHeight);
+    this.drawWeekendBorders(svg, first, daysInMonth, chartTotalHeight);
     this.drawDayHeaders(svg, first, daysInMonth);
     this.drawTodayLine(svg, first, daysInMonth, chartTotalHeight);
 
@@ -260,6 +261,34 @@ export class TimelineView extends ItemView {
     }
   }
 
+  /**
+   * 주말 블록을 감싸는 세로 구분선.
+   * 토요일의 왼쪽 경계 + 일요일의 오른쪽 경계에 옅은 빨간선을 그림.
+   * 월 경계로 인해 짝이 안 맞는 경우(월초 일요일, 월말 토요일)도 정상 처리.
+   */
+  private drawWeekendBorders(
+    svg: SVGSVGElement,
+    first: Date,
+    daysInMonth: number,
+    height: number,
+  ): void {
+    const draw = (x: number) => {
+      const line = svgEl("line");
+      line.classList.add("dnm-weekend-border");
+      line.setAttribute("x1", String(x));
+      line.setAttribute("y1", "0");
+      line.setAttribute("x2", String(x));
+      line.setAttribute("y2", String(height));
+      svg.appendChild(line);
+    };
+    for (let d = 1; d <= daysInMonth; d++) {
+      const day = new Date(first.getFullYear(), first.getMonth(), d);
+      const dow = day.getDay();
+      if (dow === 6) draw((d - 1) * DAY_WIDTH); // 토요일 왼쪽
+      if (dow === 0) draw(d * DAY_WIDTH); // 일요일 오른쪽
+    }
+  }
+
   private drawDayHeaders(svg: SVGSVGElement, first: Date, daysInMonth: number): void {
     for (let d = 1; d <= daysInMonth; d++) {
       const day = new Date(first.getFullYear(), first.getMonth(), d);
@@ -349,8 +378,8 @@ export class TimelineView extends ItemView {
   }
 
   private durationText(item: TimelineItem): string {
-    const n = businessDaysBetween(item.start, item.end);
-    if (n === 0) return "당일";
+    const n = businessDaysInSpan(item.start, item.end);
+    if (n <= 1) return "당일";
     if (item.status === "active") return `${n}일째`;
     return `${n}일`;
   }

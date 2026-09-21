@@ -127,6 +127,12 @@
   fill: var(--background-secondary);
 }
 
+.dnm-weekend-border {
+  stroke: rgba(239, 68, 68, 0.35);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .dnm-day-of-week {
   fill: var(--text-muted);
 }

@@ -52,6 +52,18 @@ export function businessDaysBetween(start: Date, end: Date): number {
   return count;
 }
 
+/** 양 끝 포함, 주말 제외 영업일 수. Gantt 라벨용. */
+export function businessDaysInSpan(start: Date, end: Date): number {
+  if (end < start) return 0;
+  let count = 0;
+  let cur = start;
+  while (cur <= end) {
+    if (!isWeekend(cur)) count++;
+    cur = addDays(cur, 1);
+  }
+  return count;
+}
+
 export function sameYearMonth(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
