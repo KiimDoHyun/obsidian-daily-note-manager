@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import type DailyNoteManagerPlugin from "../main";
 import {
   addDays,
+  businessDaysBetween,
   firstOfMonth,
   isWeekend,
   lastOfMonth,
@@ -189,15 +190,17 @@ export class TimelineView extends ItemView {
         bar.addEventListener("click", () => this.openDailyNoteFor(item));
         rowGroup.appendChild(bar);
 
-        if (item.status === "done") {
-          const check = svgEl("text");
-          check.classList.add("dnm-check");
-          check.setAttribute("x", String(x + w - 4));
-          check.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
-          check.setAttribute("text-anchor", "end");
-          check.setAttribute("font-size", "11");
-          check.textContent = "✓";
-          rowGroup.appendChild(check);
+        // 소요일 텍스트. 막대가 너무 좁으면 생략.
+        const duration = this.durationText(item);
+        if (duration && w >= 28) {
+          const dur = svgEl("text");
+          dur.classList.add("dnm-duration");
+          dur.setAttribute("x", String(x + w / 2));
+          dur.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
+          dur.setAttribute("text-anchor", "middle");
+          dur.setAttribute("font-size", "11");
+          dur.textContent = duration;
+          rowGroup.appendChild(dur);
         }
       }
 
@@ -343,6 +346,13 @@ export class TimelineView extends ItemView {
   private rangeText(item: TimelineItem): string {
     if (item.start.getTime() === item.end.getTime()) return `${toIsoDate(item.start)} (당일)`;
     return `${toIsoDate(item.start)} ~ ${toIsoDate(item.end)}`;
+  }
+
+  private durationText(item: TimelineItem): string {
+    const n = businessDaysBetween(item.start, item.end);
+    if (n === 0) return "당일";
+    if (item.status === "active") return `${n}일째`;
+    return `${n}일`;
   }
 
   private async openDailyNoteFor(item: TimelineItem): Promise<void> {
