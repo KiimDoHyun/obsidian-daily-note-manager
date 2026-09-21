@@ -35,7 +35,7 @@ export default class DailyNoteManagerPlugin extends Plugin {
       callback: () => this.activateTimelineView(),
     });
 
-    this.scheduler = new Scheduler(this.engine);
+    this.scheduler = new Scheduler(this.engine, this);
     this.scheduler.start();
 
     this.app.workspace.onLayoutReady(() => {
@@ -46,7 +46,7 @@ export default class DailyNoteManagerPlugin extends Plugin {
   }
 
   onunload() {
-    this.scheduler?.stop();
+    // Scheduler 의 interval 은 plugin.registerInterval 로 자동 정리됨
   }
 
   async loadSettings() {

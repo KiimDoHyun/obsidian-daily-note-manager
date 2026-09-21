@@ -1,9 +1,9 @@
 {
   "id": "daily-note-manager",
   "name": "Daily Note Manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.5.0",
-  "description": "옵시디언 데일리 노트 이월/경고/드롭/보관/월간 종합 자동화",
+  "description": "Automate daily note carryover, aging warnings, drop, archive, monthly summary, and timeline visualization.",
   "author": "KiimDoHyun",
   "authorUrl": "https://github.com/KiimDoHyun",
   "isDesktopOnly": false

@@ -24,7 +24,7 @@ export function registerCommands(plugin: DailyNoteManagerPlugin) {
       try {
         const report = await plugin.engine.dryRun();
         new Notice(report.summary);
-        console.log("[daily-note] dry-run", report);
+        console.debug("[daily-note] dry-run", report);
       } catch (err) {
         console.error("[daily-note] dry-run failed", err);
         new Notice(`dry-run 실패: ${(err as Error).message}`);
@@ -86,7 +86,7 @@ export function registerCommands(plugin: DailyNoteManagerPlugin) {
     callback: async () => {
       try {
         const diag = await plugin.engine.doctor();
-        console.log("[daily-note] doctor", diag);
+        console.debug("[daily-note] doctor", diag);
         new Notice(diag.ok ? `정상 (${diag.notesSubdir})` : `문제: ${diag.issues.join(", ")}`);
       } catch (err) {
         console.error("[daily-note] doctor failed", err);
