@@ -1,90 +1,114 @@
 # Obsidian Daily Note Manager
 
-Automates daily note management in Obsidian: carryover of unfinished tasks, aging warnings, auto-drop after threshold, archive, monthly summary, and timeline visualization.
+Automatically carry unfinished tasks between daily notes, warn when they linger, and drop or archive them by a monthly policy.
 
-Ported from [daily-note-system](https://github.com/KiimDoHyun/daily-note-system) (Python + macOS launchd) to a cross-platform Obsidian plugin.
+Every morning when you open Obsidian, today's note is already there. Unfinished tasks from yesterday sit in the "Carried over" section with a counter showing how many days you've been holding them. After five business days, tasks that haven't been finished move out to a monthly drop document. Completed ones log into a monthly summary. A Gantt chart in the ribbon shows the whole month at a glance.
 
-## Features
+## What a daily note looks like
 
-### Daily note automation
-- Creates today's note automatically while Obsidian is running (60s tick + on-load catch-up for missed business days).
-- Unfinished tasks from yesterday's note are moved to today's "Carried over" section with day counter and origin date.
-- After 3~4 business days of carryover, tasks get 🟠/🔴 aging warnings and "will be dropped" hint.
-- After 5 business days (configurable), tasks are auto-dropped to a monthly drop document unless marked as long-term.
-- Weekends are skipped (Fri → Mon carries +1, no notes on Sat/Sun).
+Yesterday (March 19) had these tasks:
 
-### Markers on task lines
-- `#장기` (long-term) — exempt from the drop rule, carries indefinitely.
-- `#보관` (archive) — move to `보관함.md` (archive) on next run.
-- `[-]` (immediate drop) — move to the monthly drop document on next run.
+```markdown
+## 📌 할일
+- [ ] Clean up the API response schema
+- [x] PR review
+```
 
-### Monthly documents
-- `YYYY-MM 종합.md` (summary) — completed / dropped / archived events grouped by week, with header stats auto-recomputed.
-- `YYYY-MM 드롭.md` (drop) — tasks that exceeded carryover threshold or were immediately dropped.
-- `보관함.md` (archive) — permanently archived tasks grouped by month.
+Today's note is generated automatically like this:
 
-### Timeline visualization
-- **Custom SVG Gantt view** — left ribbon calendar icon opens a timeline panel.
-  - Color-coded by status: in-progress (blue) / completed (green) / dropped (gray).
-  - Frozen label column, horizontally scrollable chart, weekend column dividers, today marker.
-  - Row hover highlight (label ↔ chart sync).
-  - Click a bar → jump to that task's origin daily note.
-  - Bar hover → tooltip with full task text and its subtasks/notes.
-- **Mermaid Gantt inside the monthly summary doc** — static snapshot auto-refreshed on each daily note creation, renders in Obsidian Reading mode (desktop, mobile, web).
+```markdown
+## 📌 할일
+
+## ✅ 이월된 할일
+- [ ] Clean up the API response schema (2일째 이월, 03-19~)
+
+## 💬 메모
+```
+
+Once "Clean up the API response schema" reaches day 3 or 4, a 🟠 or 🔴 warning appears next to it along with a "will be dropped soon" note. On day 5 it disappears from today's note and moves to `2026-03 드롭.md`. The completed "PR review" is logged in `2026-03 종합.md`, ready for month-end review.
+
+## Overriding the policy
+
+Three markers on a task line change how it's handled:
+
+- `#장기` — never dropped, keeps carrying over. Use for long-running project items.
+- `#보관` — on the next run, moves to `보관함.md`. Use for reference items you want to keep without marking complete or cancelled.
+- `- [-]` — dropped immediately. Use for tasks you decided not to do.
+
+## Timeline view
+
+Click the calendar icon in the left ribbon to open a Gantt chart of the current month. Bars are colored by status: blue for in-progress, green for complete, gray for dropped. Clicking a bar jumps to the daily note where the task first appeared. Weekends are marked with vertical dividers and today has its own marker.
+
+The monthly summary document also embeds a Mermaid Gantt snapshot that refreshes each day, so you can see the same timeline from Reading mode — including on mobile.
+
+> Screenshot placeholder (`assets/timeline.png`)
+
+## Folder layout
+
+Files the plugin creates and manages:
+
+```
+Notes/
+└── 2026-03/
+    ├── 4주차/
+    │   ├── 📅 2026-03-19.md
+    │   └── 📅 2026-03-20.md
+    ├── 2026-03 종합.md
+    └── 2026-03 드롭.md
+보관함.md
+```
+
+Weeks start on Monday, and the week containing day 1 is week 1. New folders are created when the month rolls over.
+
+## When it runs
+
+While Obsidian is open, the plugin checks every 60 seconds whether today's note exists. If Obsidian was closed for several days, the next launch catches up by processing missed business days one by one (up to 14 by default).
+
+## Install
+
+**Beta via BRAT**
+
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from community plugins.
+2. Open the BRAT ribbon icon → "Add Beta Plugin" → paste `KiimDoHyun/obsidian-daily-note-manager`.
+3. Enable "Daily Note Manager" under Settings → Community plugins.
+
+**Manual**
+
+Download `main.js`, `manifest.json`, and `styles.css` from the [Releases](https://github.com/KiimDoHyun/obsidian-daily-note-manager/releases) page and drop them into `.obsidian/plugins/daily-note-manager/` inside your vault.
+
+## Settings
+
+Under Settings → Community plugins → Daily Note Manager:
+
+- Notes subfolder (default `Notes`)
+- Drop threshold in business days (default 5)
+- Warning threshold in business days (default 3)
+- Skip weekend on/off
+- Max catch-up days on app load (default 14)
 
 ## Commands
 
-- Create today's daily note
-- Dry-run (report expected actions without writing files)
-- Force regenerate a specific date's note
+From the command palette (`Cmd/Ctrl+P`):
+
+- Create today's note
+- Dry-run today's actions (no file writes)
+- Force regenerate a specific date
 - Recompute this month's summary header
 - Refresh this month's timeline section
 - Open timeline view
 - Environment diagnostics
 
-## Note structure
+## When this plugin isn't a good fit
 
-The plugin expects and generates daily notes at `<notesSubdir>/YYYY-MM/N주차/📅 YYYY-MM-DD.md` (Korean folder naming) with three sections:
+This plugin assumes daily notes are your task ledger. If that's not how you work:
 
-- `## 📌 할일` — today's tasks
-- `## ✅ 이월된 할일` — auto-populated carryover section
-- `## 💬 메모` — free-form memo
-
-Old section names (`## 📌 오늘의 목표`, `## ✅ 미완료 이월`) are still recognized for backward compatibility.
-
-## Settings
-
-Configurable via Obsidian's settings tab:
-- Notes subfolder
-- Drop threshold (business days)
-- Warning threshold (business days)
-- Archive filename / summary suffix / drop suffix
-- Skip weekend toggle
-- Auto catch-up on load
-- Max catch-up days
-
-## Trade-offs vs. the Python original
-
-| Aspect | Python + launchd | This plugin |
-|---|---|---|
-| Trigger | Runs at login (even if Obsidian is closed) | Runs while Obsidian is open (+ catch-up on next launch) |
-| OS | macOS only | Cross-platform (custom timeline view is desktop-only) |
-| Install | git clone + install.sh + TCC permission | Community plugin (or BRAT beta) |
+- You keep long-running project tasks in daily notes — you'd need to tag every one with `#장기`. Query-based tools like [Tasks](https://publish.obsidian.md/tasks/) fit better.
+- Files moving on their own makes you uneasy — drop and archive actually move files. If you only want carryover, [Rollover Daily Todos](https://github.com/lumoe/obsidian-rollover-daily-todos) is lighter.
+- You manage tasks in project notes rather than daily notes.
 
 ## Development
 
-```bash
-npm install
-npm run dev       # esbuild watch
-npm run build     # production build
-npm test          # 61 unit + integration tests
-npm run typecheck
-```
-
-Symlink into a test vault:
-```bash
-ln -s "$PWD" "/path/to/vault/.obsidian/plugins/daily-note-manager"
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
@@ -92,129 +116,118 @@ MIT
 
 ---
 
-# 한국어 문서 (Korean)
+# 한국어
 
-[daily-note-system](https://github.com/KiimDoHyun/daily-note-system) (Python + launchd) 의 Obsidian 플러그인 포트.
+옵시디언 데일리 노트에 쌓이는 할일을 자동으로 이월하고, 오래 붙들고 있으면 경고하고, 정해진 기준을 넘으면 드롭하거나 보관하는 플러그인.
 
-옵시디언 앱 안에서 데일리 노트 이월·경고·드롭·보관·월간 종합·타임라인을 자동 처리한다.
+매일 아침 옵시디언을 열면 오늘 날짜 노트가 이미 만들어져 있다. 어제 끝내지 못한 할일은 새 노트의 "이월된 할일" 자리에 옮겨져 있고, 며칠째 붙들고 있는지 옆에 숫자가 붙는다. 5영업일이 지나도 끝나지 않은 항목은 그 달의 드롭 문서로 알아서 빠져나가고, 완료한 항목은 월간 종합 문서에 로그로 쌓인다. 리본의 달력 아이콘을 누르면 이번 달 할일이 간트 차트로 보인다.
 
-## 현재 상태
+## 실제 노트는 이렇게 생깁니다
 
-**2026-09-21 부터 시범 운영 중.** 코어 규칙(파서·상태 전이·월간 문서 갱신) 이식은 완료.
+어제 3월 19일 노트에 이런 항목이 남아 있었다고 하자.
 
-- 원본 Python 시스템은 launchd plist 이름을 `.disabled` 로 바꿔 자동 실행 중단. 문제가 나면 즉시 원복 가능.
-- 시범 운영과 마켓플레이스 심사(1~4주)를 병행. 심사 대기 중 버그 발견 시 패치 릴리스로 대응.
-
-## 주요 기능
-
-### 데일리 노트 자동화
-- 옵시디언 실행 중 매일 자정에 오늘 노트 자동 생성
-- 앱 로드 시 catch-up: 마지막 실행 이후 놓친 영업일들을 순차 처리 (기본 최대 14일)
-- 어제 미완료 항목을 오늘 이월된 할일로 이동, 이월 일수 표기
-- 3~4일 이월 시 🟠/🔴 경고, 5영업일 초과 시 자동 드롭
-- `#장기`(드롭 면제) · `#보관`(보관함 이동) · `[-]`(즉시 드롭) 마커
-
-### 월간 문서
-- `YYYY-MM 종합.md`: 완료·드롭·보관 로그, 상단 요약 매일 재계산
-- `YYYY-MM 드롭.md`: 5일 초과 이월 또는 즉시 드롭 항목
-- `보관함.md`: 상시 보관 항목
-
-### 타임라인 시각화
-- **커스텀 뷰**: 좌측 리본 달력 아이콘 → SVG Gantt 차트
-  - 진행중/완료/드롭 색 구분, 오늘 세로 붉은 점선
-  - 라벨 컬럼 고정, 우측만 가로 스크롤
-  - Row hover 하이라이트, 막대 hover → 하위 항목 상세 툴팁
-  - 막대 클릭 → 시작일 데일리 노트로 점프
-- **종합 문서 내부 Mermaid Gantt**: 정적 스냅샷, 매일 자동 갱신, 모바일에서도 렌더
-
-## 설치
-
-### 시범 배포 (BRAT)
-
-1. 옵시디언 커뮤니티 플러그인에서 [BRAT](https://github.com/TfTHacker/obsidian42-brat) 설치·활성화
-2. 좌측 리본 BRAT 아이콘 → **Add Beta plugin**
-3. 저장소 경로 입력: `KiimDoHyun/obsidian-daily-note-manager`
-4. 자동 설치 → 설정 → 커뮤니티 플러그인 → **Daily Note Manager** 활성화
-
-### 수동 설치
-
-[Releases](https://github.com/KiimDoHyun/obsidian-daily-note-manager/releases) 에서 최신 버전의 `main.js`, `manifest.json`, `styles.css` 세 파일을 다운로드해 볼트의 `.obsidian/plugins/daily-note-manager/` 폴더에 복사.
-
-## 명령어
-
-- 오늘 데일리 노트 생성
-- Dry-run: 파일 수정 없이 예상 동작만 출력
-- 특정 날짜 노트 강제 재생성
-- 이번 달 종합 재계산
-- 이번 달 타임라인 새로고침 (종합 문서 내부)
-- 타임라인 뷰 열기
-- 환경 진단
-
-## 개발
-
-```bash
-npm install
-npm run dev       # esbuild watch
-npm run build     # production build (main.js 갱신)
-npm test          # 61 unit + integration 테스트
-npm run typecheck
+```markdown
+## 📌 할일
+- [ ] API 응답 스키마 정리
+- [x] PR 리뷰
 ```
 
-로컬 개발 시 볼트 폴더에 심볼릭 링크로 연결:
+오늘 자동으로 만들어지는 3월 20일 노트는 이렇게 보인다.
 
-```bash
-ln -s "$PWD" "/path/to/vault/.obsidian/plugins/daily-note-manager"
+```markdown
+## 📌 할일
+
+## ✅ 이월된 할일
+- [ ] API 응답 스키마 정리 (2일째 이월, 03-19~)
+
+## 💬 메모
 ```
 
-## 릴리스 절차
+"API 응답 스키마 정리"가 3~4일째로 넘어가면 앞에 🟠, 🔴 마커가 붙고 "드롭 예정입니다" 경고가 나온다. 5영업일이 지나면 오늘 노트에서 사라지고 `2026-03 드롭.md`로 이동한다. 어제 완료한 "PR 리뷰"는 `2026-03 종합.md`에 기록되어 월말 회고에 쓸 수 있다.
 
-```bash
-# manifest.json 의 version 수정 (예: 0.1.1 → 0.2.0)
-git add manifest.json && git commit -m "chore: bump to 0.2.0" && git push
+## 자동 처리에 개입하고 싶을 때
 
-npm run build
+기본 정책을 덮어쓰는 마커 세 개.
 
-git tag 0.2.0 && git push origin 0.2.0
-gh release create 0.2.0 main.js manifest.json styles.css \
-  --title "0.2.0 — 요약 제목" \
-  --notes "변경 내역..."
-```
+- `#장기` — 며칠이 지나도 드롭되지 않는다. 오래 걸리는 프로젝트 항목에 붙인다.
+- `#보관` — 다음 날 노트를 만들 때 `보관함.md`로 옮겨진다. 완료도 취소도 아닌, 참고용으로 남기고 싶은 항목에 쓴다.
+- `- [-]` — 즉시 드롭 처리한다. 하려다 접은 항목을 이월 대상에서 뺄 때.
 
-Obsidian 관례상 태그명에 `v` 접두어 붙이지 않고 `manifest.json` version 과 정확히 일치시킨다 (BRAT 및 마켓 인식용).
+## 타임라인 뷰
+
+리본의 달력 아이콘을 누르면 이번 달 할일이 간트 차트로 열린다. 진행 중은 파랑, 완료는 초록, 드롭은 회색. 막대를 클릭하면 해당 항목이 처음 등장한 데일리 노트로 이동한다. 주말은 세로선으로 구분되고 오늘 날짜에는 별도 표시가 붙는다.
+
+월간 종합 문서 안에도 Mermaid 간트 스냅샷이 매일 갱신되어 들어간다. 뷰를 열지 않아도 종합 문서 스크롤로 확인할 수 있고, 모바일에서도 렌더링된다.
+
+> 스크린샷 자리 (`assets/timeline.png`)
 
 ## 폴더 구조
 
+플러그인이 만들고 관리하는 파일들.
+
 ```
-src/
-├── main.ts                      # Plugin 진입점, 리본 아이콘 등록
-├── settings.ts                  # 설정 스키마 + 설정 탭
-├── commands.ts                  # 명령어 팔레트 등록
-├── scheduler.ts                 # 60초 tick 으로 자정 감지
-├── view/
-│   └── timelineView.ts          # 커스텀 SVG Gantt 뷰
-└── engine/
-    ├── index.ts                 # Engine 파사드 (오케스트레이션)
-    ├── types.ts                 # 공용 타입 (TaskBlock, Events 등)
-    ├── constants.ts             # 섹션 헤더, 마커, 임계값
-    ├── dateutil.ts              # 영업일·주차 계산
-    ├── parser.ts                # 데일리 노트 파싱
-    ├── events.ts                # 상태 전이 판정
-    ├── paths.ts                 # 파일 경로 계산
-    ├── vault.ts                 # VaultLike 인터페이스 + Obsidian 어댑터
-    └── writers/
-        ├── dailyNote.ts         # 오늘 노트 렌더링
-        ├── monthlySummary.ts    # 월간 종합 upsert
-        ├── monthlyDrop.ts       # 월간 드롭 append
-        ├── archive.ts           # 보관함 append
-        └── timeline.ts          # Mermaid Gantt 섹션 + TimelineItem 수집
+Notes/
+└── 2026-03/
+    ├── 4주차/
+    │   ├── 📅 2026-03-19.md
+    │   └── 📅 2026-03-20.md
+    ├── 2026-03 종합.md
+    └── 2026-03 드롭.md
+보관함.md
 ```
 
-## 알려진 제약
+주차는 월요일 기준이고, 그 달의 1일이 포함된 주가 1주차다. 월이 바뀌면 새 폴더가 자동으로 만들어진다.
 
-- 옵시디언이 켜져 있어야 노트 생성이 동작 (원본 Python 대비)
-- 커스텀 타임라인 뷰는 desktop 전용 (SVG 기반, 모바일에서도 렌더는 되지만 UI 최적화 안 됨)
-- 완료/드롭 항목의 하위 정보는 해당 이벤트 발생일 데일리 노트가 남아 있어야 툴팁에서 복구됨
+## 언제 실행되나
 
-## 라이센스
+옵시디언이 켜져 있는 동안 60초마다 오늘 노트가 있는지 확인한다. 며칠 동안 옵시디언을 안 열었다가 다시 열면, 마지막 실행일부터 오늘까지 놓친 영업일(기본 최대 14일)을 순서대로 처리한다.
 
-MIT
+## 설치
+
+**BRAT (베타)**
+
+1. 커뮤니티 플러그인에서 [BRAT](https://github.com/TfTHacker/obsidian42-brat) 설치·활성화.
+2. 좌측 리본의 BRAT 아이콘 → "Add Beta Plugin" → `KiimDoHyun/obsidian-daily-note-manager` 입력.
+3. 설정 → 커뮤니티 플러그인에서 "Daily Note Manager" 활성화.
+
+**수동 설치**
+
+[Releases](https://github.com/KiimDoHyun/obsidian-daily-note-manager/releases)에서 `main.js`, `manifest.json`, `styles.css`를 받아 볼트의 `.obsidian/plugins/daily-note-manager/`에 넣는다.
+
+## 설정
+
+설정 → 커뮤니티 플러그인 → Daily Note Manager.
+
+- 노트 하위 폴더 (기본 `Notes`)
+- 드롭 임계일 (기본 5영업일)
+- 경고 임계일 (기본 3영업일)
+- 주말 스킵 여부
+- 앱 로드 시 catch-up 최대 일수 (기본 14일)
+
+## 명령어
+
+명령어 팔레트(`Cmd/Ctrl+P`).
+
+- 오늘 노트 생성
+- 오늘 실행 결과 미리보기 (dry-run)
+- 특정 날짜 강제 재생성
+- 이번 달 종합 재계산
+- 이번 달 타임라인 새로고침
+- 타임라인 뷰 열기
+- 환경 진단
+
+## 이 플러그인이 안 맞는 경우
+
+데일리 노트를 태스크 장부처럼 쓰는 워크플로를 전제한다.
+
+- 장기 프로젝트 항목을 데일리 노트에 그대로 두는 스타일 — `#장기`를 매번 붙여야 해서 번거롭다. [Tasks](https://publish.obsidian.md/tasks/)처럼 쿼리 기반 도구가 더 맞다.
+- 파일이 자동으로 이동하는 게 불안한 경우 — 드롭·보관 동작이 실제 파일을 옮긴다. 이월만 원한다면 [Rollover Daily Todos](https://github.com/lumoe/obsidian-rollover-daily-todos)가 더 가볍다.
+- 데일리 노트가 아니라 프로젝트 노트 중심으로 태스크를 관리하는 경우.
+
+## 개발
+
+개발 환경, 소스 구조, 릴리스 절차는 [CONTRIBUTING.md](./CONTRIBUTING.md) 참조.
+
+## 라이선스
+
+MIT.
