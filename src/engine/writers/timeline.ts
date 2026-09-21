@@ -24,16 +24,32 @@ const DROPPED_WITH_ORIGIN_RE = /^- (\d{2})-(\d{2}) (.+?) \((\d{2})-(\d{2}) 시�
 const SUMMARY_COMPLETED_HEADER = "### ✅ 완료";
 const SUMMARY_DROPPED_HEADER = "### ⏭️ 드롭";
 
-export function timelinePath(month: Date, settings: DailyNoteSettings): string {
-  const ym = ymOf(month);
-  return `${settings.notesSubdir}/${ym}/📊 ${ym} 타임라인.md`;
-}
+const TIMELINE_SECTION_HEADER = "## 📊 타임라인";
 
-export async function generateTimeline(
+/**
+ * 월간 종합 문서에 `## 📊 타임라인` 섹션을 upsert.
+ * 이 섹션이 이미 있으면 다음 `## ` 헤더 직전까지 통째로 교체, 없으면
+ * `## 📈 이번 달 요약` 블록 다음(첫 `## N주차` 직전)에 새로 삽입.
+ */
+export async function upsertTimelineSection(
   month: Date,
   vault: VaultAdapter,
   settings: DailyNoteSettings,
-): Promise<string> {
+): Promise<void> {
+  const summaryP = monthlySummaryPath(month, settings);
+  if (!vault.exists(summaryP)) return;
+
+  const items = await collectTimelineItems(month, vault, settings);
+  const raw = await vault.read(summaryP);
+  const next = replaceOrInsertTimeline(raw, renderTimelineBlock(month, items));
+  await vault.write(summaryP, next);
+}
+
+async function collectTimelineItems(
+  month: Date,
+  vault: VaultAdapter,
+  settings: DailyNoteSettings,
+): Promise<TimelineItem[]> {
   const items: TimelineItem[] = [];
 
   const summaryP = monthlySummaryPath(month, settings);
@@ -61,10 +77,80 @@ export async function generateTimeline(
       }
     }
   }
+  return items;
+}
 
-  const outPath = timelinePath(month, settings);
-  await vault.write(outPath, renderTimelineDoc(month, items));
-  return outPath;
+function replaceOrInsertTimeline(raw: string, block: string[]): string {
+  const lines = raw.split(/\r?\n/);
+  const out: string[] = [];
+  let i = 0;
+  const n = lines.length;
+  let inserted = false;
+
+  // 이미 있으면 교체
+  while (i < n) {
+    if (lines[i] === TIMELINE_SECTION_HEADER) {
+      out.push(...block);
+      i++;
+      while (i < n && !lines[i].startsWith("## ")) i++;
+      inserted = true;
+      continue;
+    }
+    out.push(lines[i]);
+    i++;
+  }
+  if (inserted) return out.join("\n");
+
+  // 없으면 첫 `## N주차` 직전에 삽입
+  const inserted2: string[] = [];
+  let done = false;
+  for (const line of out) {
+    if (!done && /^## \d+주차 /.test(line)) {
+      inserted2.push(...block);
+      done = true;
+    }
+    inserted2.push(line);
+  }
+  if (!done) inserted2.push("", ...block);
+  return inserted2.join("\n");
+}
+
+function renderTimelineBlock(month: Date, items: TimelineItem[]): string[] {
+  const done = items.filter((i) => i.section === "완료");
+  const active = items.filter((i) => i.section === "진행중");
+  const crit = items.filter((i) => i.section === "드롭");
+  const ym = ymOf(month);
+
+  const block: string[] = [
+    TIMELINE_SECTION_HEADER,
+    `> 완료 ${done.length} · 진행중 ${active.length} · 드롭 ${crit.length}`,
+    "",
+  ];
+
+  if (items.length === 0) {
+    block.push("_이번 달 이벤트 없음._", "");
+    return block;
+  }
+
+  block.push("```mermaid", "gantt", `    title ${ym} 업무 타임라인`);
+  block.push("    dateFormat YYYY-MM-DD");
+  block.push("    axisFormat %m-%d");
+  block.push("    excludes weekends");
+  block.push("");
+
+  const emit = (title: string, list: TimelineItem[]) => {
+    if (list.length === 0) return;
+    block.push(`    section ${title}`);
+    for (const item of list) {
+      block.push(`    ${sanitizeName(item.name)} :${item.status}, ${formatRange(item)}`);
+    }
+    block.push("");
+  };
+  emit("진행중", active);
+  emit("완료", done);
+  emit("드롭", crit);
+  block.push("```", "");
+  return block;
 }
 
 function extractFromSummary(text: string, year: number): TimelineItem[] {
@@ -131,58 +217,6 @@ function parseDroppedLine(line: string, year: number): TimelineItem | null {
 /** Mermaid Gantt 태스크명에서 특수문자 제거 (: , # 는 문법 충돌) */
 function sanitizeName(name: string): string {
   return name.replace(/[:,#]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
-}
-
-function renderTimelineDoc(month: Date, items: TimelineItem[]): string {
-  const ym = ymOf(month);
-  const header = [
-    "---",
-    `tags: [timeline, ${ym}]`,
-    "---",
-    "",
-    `# ${ym} 업무 타임라인`,
-    "",
-    "> 이 문서는 `이번 달 타임라인 생성` 명령으로 자동 생성됩니다.",
-    "> 수동 편집은 다음 생성 시 덮어써짐.",
-    "",
-  ];
-
-  if (items.length === 0) {
-    return header.concat(["_이번 달 이벤트 없음._", ""]).join("\n");
-  }
-
-  const done = items.filter((i) => i.section === "완료");
-  const active = items.filter((i) => i.section === "진행중");
-  const crit = items.filter((i) => i.section === "드롭");
-
-  const gantt: string[] = [
-    "```mermaid",
-    "gantt",
-    `    title ${ym} 업무 타임라인`,
-    "    dateFormat YYYY-MM-DD",
-    "    axisFormat %m-%d",
-    "    excludes weekends",
-    "",
-  ];
-
-  const emitSection = (title: string, list: TimelineItem[]) => {
-    if (list.length === 0) return;
-    gantt.push(`    section ${title}`);
-    for (const item of list) {
-      gantt.push(`    ${sanitizeName(item.name)} :${item.status}, ${formatRange(item)}`);
-    }
-    gantt.push("");
-  };
-
-  emitSection("진행중", active);
-  emitSection("완료", done);
-  emitSection("드롭", crit);
-  gantt.push("```");
-
-  const summaryLine =
-    `> 완료 ${done.length} · 진행중 ${active.length} · 드롭 ${crit.length}`;
-
-  return header.concat([summaryLine, ""], gantt, [""]).join("\n");
 }
 
 function formatRange(item: TimelineItem): string {

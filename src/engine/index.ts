@@ -23,7 +23,7 @@ import {
   recomputeHeader,
   type SummaryEventType,
 } from "./writers/monthlySummary";
-import { generateTimeline } from "./writers/timeline";
+import { upsertTimelineSection } from "./writers/timeline";
 
 export type RunStatus =
   | "created"
@@ -104,9 +104,9 @@ export class Engine {
     await recomputeHeader(path, this.vault);
   }
 
-  async generateTimelineForMonth(yearMonth: string): Promise<string> {
+  async refreshTimelineInSummary(yearMonth: string): Promise<void> {
     const [y, m] = yearMonth.split("-").map((n) => parseInt(n, 10));
-    return generateTimeline(new Date(y, m - 1, 1), this.vault, this.settings);
+    await upsertTimelineSection(new Date(y, m - 1, 1), this.vault, this.settings);
   }
 
   async doctor(): Promise<DoctorReport> {
@@ -206,8 +206,10 @@ export class Engine {
 
     const thisMonthSummary = await ensureSummary(today, this.vault, this.settings);
     await recomputeHeader(thisMonthSummary, this.vault);
+    await upsertTimelineSection(today, this.vault, this.settings);
     if (!sameYearMonth(today, effectivePrevDate!)) {
       await recomputeHeader(prevSummaryPath, this.vault);
+      await upsertTimelineSection(effectivePrevDate!, this.vault, this.settings);
     }
 
     this.settings.lastRunDate = toIsoDate(today);
