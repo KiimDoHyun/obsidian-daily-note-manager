@@ -471,15 +471,15 @@ export class TimelineView extends ItemView {
   }
 
   /**
-   * 진행중 항목의 드롭 경고 emoji.
-   * settings.warnThresholdDays 를 기준으로:
-   *   businessDaysInSpan === warnOrange → 🟠
-   *   businessDaysInSpan >= warnRed(warnOrange+1) → 🔴
-   * #장기 마커 있으면 면제 (데일리 노트 규칙과 동일).
+   * 진행중 항목 앞에 붙일 상태 이모지.
+   * - #장기 마커: ♾️ (드롭 면제)
+   * - 드롭 하루 전: 🔴
+   * - 드롭 이틀 전: 🟠
+   * 완료·드롭 항목은 색으로 이미 구분되므로 빈 문자열.
    */
   private warningEmoji(item: TimelineItem): string {
     if (item.status !== "active") return "";
-    if (item.hasLongMarker) return "";
+    if (item.hasLongMarker) return "♾️";
     const n = businessDaysInSpan(item.start, item.end);
     const drop = this.plugin.settings.dropThresholdDays;
     const warnOrange = Math.max(1, drop - this.plugin.settings.warnOrangeDaysBeforeDrop);
@@ -517,8 +517,10 @@ export class TimelineView extends ItemView {
     let w = 0;
     for (const ch of text) {
       const code = ch.codePointAt(0) ?? 0;
-      if (code > 0x1f000 && code < 0x1fbff) w += 14; // emoji
-      else if (/[ㄱ-ㆎ가-힣]/.test(ch)) w += 11;
+      // 광의의 emoji 범위 (일반 emoji + 기호+무한 등 확장)
+      if ((code > 0x1f000 && code < 0x1fbff) || code === 0x267e /* ♾ */) {
+        w += 14;
+      } else if (/[ㄱ-ㆎ가-힣]/.test(ch)) w += 11;
       else if (ch === " ") w += 3.5;
       else w += 7;
     }
@@ -542,8 +544,15 @@ export class TimelineView extends ItemView {
       `${sectionMark} ${this.sectionLabel(item.section)} · ${this.durationText(item)} · ${rangeLabel(toIsoDate(item.start), toIsoDate(item.end), this.locale)}`,
     );
 
+    // #장기 마커 안내 (드롭 면제)
+    if (item.hasLongMarker && item.status === "active") {
+      const info = el.createDiv({ cls: "dnm-tt-info" });
+      info.setText(t("longTermTooltip", this.locale));
+    }
+
     // 드롭 경고 카운트다운. highlight 부분만 별도 span 으로 감싸 강조.
-    if (warnEmoji) {
+    // #장기 항목은 드롭 면제라 경고 안 함.
+    if (warnEmoji && !item.hasLongMarker) {
       const daysUntilDrop = this.plugin.settings.dropThresholdDays
         - businessDaysInSpan(item.start, item.end);
       if (daysUntilDrop > 0) {

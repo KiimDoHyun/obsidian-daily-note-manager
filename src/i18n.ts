@@ -40,6 +40,10 @@ const M = {
   },
   warnHighlightDaysMulti: { ko: "{n}영업일", en: "{n} business days" },
   warnHighlightNextDay: { ko: "다음 영업일", en: "the next business day" },
+  longTermTooltip: {
+    ko: "♾️ #장기 마커 — 드롭 규칙 면제, 무한 이월됩니다",
+    en: "♾️ Tagged #장기 (long-term) — exempt from the drop rule, carries indefinitely",
+  },
   sameDay: { ko: "당일", en: "Same day" },
   viewDisplayLabel: { ko: "업무 타임라인", en: "Task Timeline" },
 
