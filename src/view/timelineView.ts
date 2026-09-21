@@ -80,8 +80,7 @@ export class TimelineView extends ItemView {
     this.renderToolbar();
     this.renderLegend(items);
     this.renderChart(items);
-    this.tooltipEl = this.contentEl.createDiv({ cls: "dnm-tooltip" });
-    this.tooltipEl.style.display = "none";
+    this.tooltipEl = this.contentEl.createDiv({ cls: "dnm-tooltip is-hidden" });
   }
 
   private renderToolbar(): void {
@@ -122,10 +121,9 @@ export class TimelineView extends ItemView {
 
     const legend = this.contentEl.createDiv({ cls: "dnm-legend" });
 
-    const swatchItem = (color: string, label: string, count: number) => {
+    const swatchItem = (variant: "active" | "done" | "dropped", label: string, count: number) => {
       const wrap = legend.createDiv({ cls: "dnm-legend-item" });
-      const swatch = wrap.createDiv({ cls: "dnm-legend-swatch" });
-      swatch.style.background = color;
+      wrap.createDiv({ cls: `dnm-legend-swatch is-${variant}` });
       wrap.createSpan({ text: `${label} ${count}` });
     };
 
@@ -135,9 +133,9 @@ export class TimelineView extends ItemView {
       wrap.createSpan({ text: String(count) });
     };
 
-    swatchItem(COLOR_ACTIVE, t("legendActive", this.locale), active);
-    swatchItem(COLOR_DONE, t("legendDone", this.locale), done);
-    swatchItem(COLOR_DROPPED, t("legendDropped", this.locale), dropped);
+    swatchItem("active", t("legendActive", this.locale), active);
+    swatchItem("done", t("legendDone", this.locale), done);
+    swatchItem("dropped", t("legendDropped", this.locale), dropped);
     badgeItem(t("longTermLabel", this.locale), longTerm);
 
     legend.createSpan({ text: t("legendHint", this.locale), cls: "dnm-legend-hint" });
@@ -196,11 +194,11 @@ export class TimelineView extends ItemView {
       }
       labelDiv.setAttr("title", item.name); // 브라우저 native tooltip (fallback)
       labelDiv.setText(item.name);
-      labelDiv.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
-      labelDiv.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
-      labelDiv.addEventListener("mouseleave", () => this.hideTooltip());
-      labelDiv.addEventListener("click", () => this.openDailyNoteFor(item));
-      labelDiv.style.cursor = "pointer";
+      labelDiv.addClass("is-clickable");
+      this.registerDomEvent(labelDiv, "mouseenter", (e) => this.showTooltip(item, e));
+      this.registerDomEvent(labelDiv, "mousemove", (e) => this.positionTooltip(e));
+      this.registerDomEvent(labelDiv, "mouseleave", () => this.hideTooltip());
+      this.registerDomEvent(labelDiv, "click", () => this.openDailyNoteFor(item));
 
       // 차트 row 그룹
       const rowGroup = svgEl("g");
@@ -250,7 +248,6 @@ export class TimelineView extends ItemView {
           overlay.setAttribute("width", String(DAY_WIDTH));
           overlay.setAttribute("height", String(BAR_HEIGHT));
           overlay.setAttribute("fill", "url(#dnm-weekend-stripes)");
-          overlay.style.pointerEvents = "none";
           rowGroup.appendChild(overlay);
         }
 
@@ -271,19 +268,19 @@ export class TimelineView extends ItemView {
         labelDiv.classList.toggle("dnm-hovered", on);
         rowGroup.classList.toggle("dnm-hovered", on);
       };
-      labelDiv.addEventListener("mouseenter", () => setHover(true));
-      labelDiv.addEventListener("mouseleave", () => setHover(false));
+      this.registerDomEvent(labelDiv, "mouseenter", () => setHover(true));
+      this.registerDomEvent(labelDiv, "mouseleave", () => setHover(false));
       rowGroup.addEventListener("mouseenter", () => setHover(true));
       rowGroup.addEventListener("mouseleave", () => setHover(false));
     });
   }
 
   private setupDragHandle(handle: HTMLElement, labelsCol: HTMLElement): void {
-    handle.addEventListener("mousedown", (e) => {
+    this.registerDomEvent(handle, "mousedown", (e) => {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = labelsCol.offsetWidth;
-      document.body.style.cursor = "col-resize";
+      document.body.addClass("dnm-resizing");
 
       const onMove = (evt: MouseEvent) => {
         const delta = evt.clientX - startX;
@@ -293,7 +290,7 @@ export class TimelineView extends ItemView {
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
-        document.body.style.cursor = "";
+        document.body.removeClass("dnm-resizing");
         this.plugin.settings.timelineLabelWidth = labelsCol.offsetWidth;
         void this.plugin.saveSettings();
       };
@@ -598,13 +595,13 @@ export class TimelineView extends ItemView {
     const hint = el.createDiv({ cls: "dnm-tt-hint" });
     hint.setText(t("clickHint", this.locale));
 
-    el.style.display = "block";
+    el.removeClass("is-hidden");
     this.positionTooltip(evt);
   }
 
   private positionTooltip(evt: MouseEvent): void {
     const el = this.tooltipEl;
-    if (!el || el.style.display === "none") return;
+    if (!el || el.hasClass("is-hidden")) return;
     const container = this.contentEl.getBoundingClientRect();
     const relX = evt.clientX - container.left;
     const relY = evt.clientY - container.top;
@@ -625,7 +622,7 @@ export class TimelineView extends ItemView {
   }
 
   private hideTooltip(): void {
-    if (this.tooltipEl) this.tooltipEl.style.display = "none";
+    if (this.tooltipEl) this.tooltipEl.addClass("is-hidden");
   }
 
   private async openDailyNoteFor(item: TimelineItem): Promise<void> {

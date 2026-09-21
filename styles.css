@@ -48,6 +48,10 @@
   border-radius: 2px;
 }
 
+.dnm-legend-swatch.is-active { background: #3b82f6; }
+.dnm-legend-swatch.is-done { background: #22c55e; }
+.dnm-legend-swatch.is-dropped { background: #9ca3af; }
+
 .dnm-legend-badge {
   padding: 1px 6px;
   border-radius: 3px;
@@ -120,6 +124,10 @@
   background: var(--background-modifier-hover);
 }
 
+.dnm-row-label.is-clickable {
+  cursor: pointer;
+}
+
 /* 좌·우 컬럼 사이 드래그 핸들 */
 .dnm-drag-handle {
   width: 4px;
@@ -185,6 +193,10 @@
   opacity: 1;
 }
 
+.dnm-bar-weekend {
+  pointer-events: none;
+}
+
 .dnm-check {
   fill: white;
   pointer-events: none;
@@ -225,6 +237,14 @@
   pointer-events: none;
   font-size: 12px;
   color: var(--text-normal);
+}
+
+.dnm-tooltip.is-hidden {
+  display: none;
+}
+
+body.dnm-resizing {
+  cursor: col-resize;
 }
 
 .dnm-tt-title {
