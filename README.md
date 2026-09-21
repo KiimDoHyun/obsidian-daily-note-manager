@@ -57,9 +57,11 @@ Left ribbon → calendar icon → this month's Gantt chart.
 
 ![Timeline](./assets/timeline.png)
 
-Hover state shows the task's subtasks and duration:
+Hover a bar for the full task details, subtasks, and drop countdown:
 
-![Timeline tooltip](./assets/timeline-tooltip.png)
+| Red — drops next business day | Orange — with countdown | Long-term — exempt |
+|---|---|---|
+| ![Red warning](./assets/timeline-tooltip-red.png) | ![Orange warning](./assets/timeline-tooltip-orange.png) | ![Long-term](./assets/timeline-tooltip-long.png) |
 
 The monthly summary document also embeds a Mermaid Gantt snapshot that refreshes each day.
 
@@ -205,9 +207,11 @@ MIT
 
 ![타임라인](./assets/timeline.png)
 
-Hover 시 하위 항목과 소요일 확인:
+막대에 hover 하면 전체 이름·하위 항목·드롭 카운트다운 확인:
 
-![툴팁](./assets/timeline-tooltip.png)
+| 🔴 (다음 영업일 드롭) | 🟠 (카운트다운) | [장기] (면제) |
+|---|---|---|
+| ![빨강 경고](./assets/timeline-tooltip-red.png) | ![주황 경고](./assets/timeline-tooltip-orange.png) | ![장기](./assets/timeline-tooltip-long.png) |
 
 월간 종합 문서에도 Mermaid 간트 스냅샷이 매일 자동 갱신된다.
 
