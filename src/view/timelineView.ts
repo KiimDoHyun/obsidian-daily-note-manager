@@ -91,7 +91,7 @@ export class TimelineView extends ItemView {
       await this.rerender();
     };
 
-    bar.createEl("span", { text: ymOf(this.currentMonth), cls: "dnm-ym" });
+    bar.createSpan({ text: ymOf(this.currentMonth), cls: "dnm-ym" });
 
     const next = bar.createEl("button", { text: "▶" });
     next.onclick = async () => {
