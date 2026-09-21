@@ -1,4 +1,3 @@
-import { App } from "obsidian";
 import type { DailyNoteSettings } from "../settings";
 import {
   addDays,
@@ -13,7 +12,7 @@ import { classifyEvents } from "./events";
 import { parseDailyNoteText } from "./parser";
 import { dailyNotePath } from "./paths";
 import { emptyEvents, emptyParsed, type DailyNoteParsed, type Events } from "./types";
-import { VaultAdapter } from "./vault";
+import type { VaultLike } from "./vault";
 import { renderDailyNote } from "./writers/dailyNote";
 import { appendArchived, ensureArchive } from "./writers/archive";
 import { appendDropped, ensureDrop } from "./writers/monthlyDrop";
@@ -66,15 +65,13 @@ export interface DoctorReport {
 }
 
 export class Engine {
-  private vault: VaultAdapter;
-
   constructor(
-    private app: App,
+    private vault: VaultLike,
     private settings: DailyNoteSettings,
     private saveSettings: () => Promise<void>,
-  ) {
-    this.vault = new VaultAdapter(app);
-  }
+    /** doctor() 용 표시명. 없으면 "(vault)" */
+    private vaultDisplayName: string = "(vault)",
+  ) {}
 
   updateSettings(settings: DailyNoteSettings): void {
     this.settings = settings;
@@ -113,15 +110,14 @@ export class Engine {
     const issues: string[] = [];
     const today = todayDate();
     const path = dailyNotePath(today, this.settings);
-    const notesRoot = this.settings.notesSubdir;
-    const rootExists =
-      this.app.vault.getAbstractFileByPath(notesRoot) !== null || notesRoot === "";
-    if (!rootExists) issues.push(`노트 폴더 없음: ${notesRoot}`);
     if (!this.settings.notesSubdir) issues.push("notesSubdir 미설정");
+    else if (!this.vault.exists(this.settings.notesSubdir)) {
+      issues.push(`노트 폴더 없음: ${this.settings.notesSubdir}`);
+    }
     return {
       ok: issues.length === 0,
       issues,
-      vaultRoot: this.app.vault.getName(),
+      vaultRoot: this.vaultDisplayName,
       notesSubdir: this.settings.notesSubdir,
       todayPath: path,
       lastRunDate: this.settings.lastRunDate,

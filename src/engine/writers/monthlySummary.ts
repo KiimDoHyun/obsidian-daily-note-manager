@@ -8,7 +8,7 @@ import { allWeeksOfMonth, mmddOf, weekOfMonth, ymOf } from "../dateutil";
 import { monthlySummaryPath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";
 import type { TaskBlock } from "../types";
-import type { VaultAdapter } from "../vault";
+import type { VaultLike } from "../vault";
 
 export type SummaryEventType = "completed" | "dropped" | "archived";
 
@@ -19,7 +19,7 @@ const COMPLETED_DURATION_RE = /\((\d+)영업일 소요/;
 
 export async function ensureSummary(
   month: Date,
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<string> {
   const path = monthlySummaryPath(month, settings);
@@ -60,7 +60,7 @@ export async function appendEvent(
   eventType: SummaryEventType,
   eventDate: Date,
   block: TaskBlock,
-  vault: VaultAdapter,
+  vault: VaultLike,
 ): Promise<void> {
   const line = formatEventLine(eventType, eventDate, block);
   const raw = await vault.read(summaryPath);
@@ -164,7 +164,7 @@ function formatDroppedSuffix(block: TaskBlock, _eventDate: Date): string {
   return `(${mmddOf(block.originDate)} 시작, ${block.carryoverDays}영업일 이월 후 드롭)`;
 }
 
-export async function recomputeHeader(summaryPath: string, vault: VaultAdapter): Promise<void> {
+export async function recomputeHeader(summaryPath: string, vault: VaultLike): Promise<void> {
   const raw = await vault.read(summaryPath);
   const lines = raw.split(/\r?\n/);
   const completed = collectEvents(lines, SUMMARY_COMPLETED_HEADER);

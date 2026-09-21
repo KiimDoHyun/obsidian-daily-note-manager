@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, DailyNoteSettings, DailyNoteSettingTab } from "./sett
 import { registerCommands } from "./commands";
 import { Scheduler } from "./scheduler";
 import { Engine } from "./engine";
+import { VaultAdapter } from "./engine/vault";
 import { TIMELINE_VIEW_TYPE, TimelineView } from "./view/timelineView";
 
 export default class DailyNoteManagerPlugin extends Plugin {
@@ -13,7 +14,12 @@ export default class DailyNoteManagerPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    this.engine = new Engine(this.app, this.settings, () => this.saveData(this.settings));
+    this.engine = new Engine(
+      new VaultAdapter(this.app),
+      this.settings,
+      () => this.saveData(this.settings),
+      this.app.vault.getName(),
+    );
     this.addSettingTab(new DailyNoteSettingTab(this.app, this));
     registerCommands(this);
 

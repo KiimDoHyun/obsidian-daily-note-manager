@@ -1,10 +1,22 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
 
 /**
- * Obsidian Vault API 위에 얇은 파일시스템 어댑터.
- * 코어 로직이 Obsidian API 세부에 노출되지 않도록 감싼다.
+ * 파일시스템 어댑터 인터페이스.
+ * VaultAdapter(Obsidian) 와 테스트용 InMemoryVault 가 모두 이 형태를 만족.
+ * 코어 엔진·writer 는 이 인터페이스에만 의존해서 Obsidian API 세부에 종속되지 않게 한다.
  */
-export class VaultAdapter {
+export interface VaultLike {
+  exists(path: string): boolean;
+  read(path: string): Promise<string>;
+  write(path: string, content: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  ensureFolder(path: string): Promise<void>;
+}
+
+/**
+ * Obsidian Vault API 위에 얇은 파일시스템 어댑터.
+ */
+export class VaultAdapter implements VaultLike {
   constructor(private app: App) {}
 
   private norm(path: string): string {

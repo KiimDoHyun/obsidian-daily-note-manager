@@ -2,11 +2,11 @@ import { mmddOf } from "../dateutil";
 import { monthlyDropPath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";
 import type { TaskBlock } from "../types";
-import type { VaultAdapter } from "../vault";
+import type { VaultLike } from "../vault";
 
 export async function ensureDrop(
   month: Date,
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<string> {
   const path = monthlyDropPath(month, settings);
@@ -31,7 +31,7 @@ export async function appendDropped(
   dropPath: string,
   eventDate: Date,
   block: TaskBlock,
-  vault: VaultAdapter,
+  vault: VaultLike,
 ): Promise<void> {
   const raw = await vault.read(dropPath);
   const lines = raw.split(/\r?\n/);

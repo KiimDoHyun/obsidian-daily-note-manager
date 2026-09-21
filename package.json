@@ -6,9 +6,15 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "typecheck": "tsc -noEmit -skipLibCheck"
+    "typecheck": "tsc -noEmit -skipLibCheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
-  "keywords": ["obsidian-plugin", "daily-note"],
+  "keywords": [
+    "obsidian-plugin",
+    "daily-note"
+  ],
   "author": "KiimDoHyun",
   "license": "MIT",
   "devDependencies": {
@@ -17,6 +23,7 @@
     "esbuild": "^0.20.0",
     "obsidian": "latest",
     "tslib": "^2.6.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }

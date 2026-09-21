@@ -2,10 +2,10 @@ import { mmddOf, ymOf } from "../dateutil";
 import { archivePath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";
 import type { TaskBlock } from "../types";
-import type { VaultAdapter } from "../vault";
+import type { VaultLike } from "../vault";
 
 export async function ensureArchive(
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<string> {
   const path = archivePath(settings);
@@ -29,7 +29,7 @@ export async function appendArchived(
   archivePath_: string,
   eventDate: Date,
   block: TaskBlock,
-  vault: VaultAdapter,
+  vault: VaultLike,
 ): Promise<void> {
   const ym = ymOf(eventDate);
   const groupHeader = `## ${ym}`;

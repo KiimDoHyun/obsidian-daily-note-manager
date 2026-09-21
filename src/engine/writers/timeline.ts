@@ -2,7 +2,7 @@ import { addDays, mmddOf, sameYearMonth, toIsoDate, today as todayDate, ymOf } f
 import { parseDailyNoteText } from "../parser";
 import { dailyNotePath, monthlySummaryPath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";
-import type { VaultAdapter } from "../vault";
+import type { VaultLike } from "../vault";
 
 export type TimelineStatus = "done" | "active" | "crit";
 export type TimelineSection = "완료" | "진행중" | "드롭";
@@ -35,7 +35,7 @@ const TIMELINE_SECTION_HEADER = "## 📊 타임라인";
  */
 export async function upsertTimelineSection(
   month: Date,
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<void> {
   const summaryP = monthlySummaryPath(month, settings);
@@ -49,7 +49,7 @@ export async function upsertTimelineSection(
 
 export async function collectTimelineItems(
   month: Date,
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<TimelineItem[]> {
   const items: TimelineItem[] = [];
@@ -93,7 +93,7 @@ export async function collectTimelineItems(
  */
 async function attachChildrenFromEventNote(
   item: TimelineItem,
-  vault: VaultAdapter,
+  vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<void> {
   const notePath = dailyNotePath(item.end, settings);
