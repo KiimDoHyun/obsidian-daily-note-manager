@@ -471,29 +471,59 @@ export class TimelineView extends ItemView {
   }
 
   /**
-   * 막대 폭에 맞춰 소요일 텍스트를 결정.
-   * 폭에 여유 있으면 full ("Same day", "Day 4", "4일째"),
-   * 좁으면 short ("1d", "4d", "4일"), 그것도 안 맞으면 빈 문자열.
+   * 진행중 항목의 드롭 경고 emoji.
+   * settings.warnThresholdDays 를 기준으로:
+   *   businessDaysInSpan === warnOrange → 🟠
+   *   businessDaysInSpan >= warnRed(warnOrange+1) → 🔴
+   * #장기 마커 있으면 면제 (데일리 노트 규칙과 동일).
+   */
+  private warningEmoji(item: TimelineItem): string {
+    if (item.status !== "active") return "";
+    if (item.hasLongMarker) return "";
+    const n = businessDaysInSpan(item.start, item.end);
+    const warnOrange = this.plugin.settings.warnThresholdDays;
+    const warnRed = warnOrange + 1;
+    if (n >= warnRed) return "🔴";
+    if (n === warnOrange) return "🟠";
+    return "";
+  }
+
+  /**
+   * 막대 폭에 맞춰 표시 텍스트를 결정.
+   * 우선순위: '경고+full' → '경고+short' → '경고만' → 'full' → 'short' → 빈 문자열.
    */
   private durationDisplay(item: TimelineItem, barWidth: number): string {
     const n = businessDaysInSpan(item.start, item.end);
     const full = durationLabel(n, item.status, this.locale);
-    if (this.estimateTextWidth(full) + 8 <= barWidth) return full;
     const short = this.locale === "ko" ? `${n}일` : `${n}d`;
-    if (this.estimateTextWidth(short) + 8 <= barWidth) return short;
+    const emoji = this.warningEmoji(item);
+
+    const fits = (s: string) => this.estimateTextWidth(s) + 8 <= barWidth;
+    const withEm = (s: string) => (emoji ? `${emoji} ${s}` : s);
+
+    if (emoji) {
+      if (fits(withEm(full))) return withEm(full);
+      if (fits(withEm(short))) return withEm(short);
+      if (fits(emoji)) return emoji;
+    }
+    if (fits(full)) return full;
+    if (fits(short)) return short;
     return "";
   }
 
-  /** SVG text 폭 추정. 한글 11px, 그 외 7px 기준 (font-size 11 500 weight). */
+  /** 한글 문자는 11px, 이모지는 대략 14px, ASCII 는 7px 기준. */
   private estimateTextWidth(text: string): number {
     let w = 0;
     for (const ch of text) {
-      if (/[ㄱ-ㆎ가-힣]/.test(ch)) w += 11; // Hangul
+      const code = ch.codePointAt(0) ?? 0;
+      if (code > 0x1f000 && code < 0x1fbff) w += 14; // emoji
+      else if (/[ㄱ-ㆎ가-힣]/.test(ch)) w += 11;
       else if (ch === " ") w += 3.5;
       else w += 7;
     }
     return w;
   }
+
 
   private showTooltip(item: TimelineItem, evt: MouseEvent): void {
     const el = this.tooltipEl;
@@ -504,7 +534,9 @@ export class TimelineView extends ItemView {
     title.setText(item.name);
 
     const meta = el.createDiv({ cls: "dnm-tt-meta" });
-    const sectionMark = item.section === "진행중" ? "🔵" : item.section === "완료" ? "🟢" : "⚫";
+    const warnEmoji = this.warningEmoji(item);
+    const sectionMark = warnEmoji
+      || (item.section === "진행중" ? "🔵" : item.section === "완료" ? "🟢" : "⚫");
     meta.setText(
       `${sectionMark} ${this.sectionLabel(item.section)} · ${this.durationText(item)} · ${rangeLabel(toIsoDate(item.start), toIsoDate(item.end), this.locale)}`,
     );

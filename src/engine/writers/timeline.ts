@@ -15,6 +15,8 @@ export interface TimelineItem {
   end: Date;
   /** 원본 데일리 노트에 있던 하위 항목/메모 (들여쓰기 유지된 raw 라인들) */
   children: string[];
+  /** #장기 마커. 진행중 항목 드롭 경고 면제용 */
+  hasLongMarker: boolean;
 }
 
 const COMPLETED_SAMEDAY_RE = /^- (\d{2})-(\d{2}) (.+?) \(당일\)$/;
@@ -79,6 +81,7 @@ export async function collectTimelineItems(
             start: block.originDate,
             end: today,
             children: block.children,
+            hasLongMarker: block.hasLongMarker,
           });
         }
       }
@@ -105,6 +108,7 @@ async function attachChildrenFromEventNote(
     for (const block of all) {
       if (block.topText === item.name) {
         item.children = block.children;
+        item.hasLongMarker = block.hasLongMarker;
         return;
       }
     }
@@ -216,13 +220,13 @@ function parseCompletedLine(line: string, year: number): TimelineItem | null {
   const same = COMPLETED_SAMEDAY_RE.exec(line);
   if (same) {
     const end = new Date(year, parseInt(same[1], 10) - 1, parseInt(same[2], 10));
-    return { name: same[3], section: "완료", status: "done", start: end, end, children: [] };
+    return { name: same[3], section: "완료", status: "done", start: end, end, children: [], hasLongMarker: false };
   }
   const dur = COMPLETED_DURATION_RE.exec(line);
   if (dur) {
     const end = new Date(year, parseInt(dur[1], 10) - 1, parseInt(dur[2], 10));
     const start = new Date(year, parseInt(dur[5], 10) - 1, parseInt(dur[6], 10));
-    return { name: dur[3], section: "완료", status: "done", start, end, children: [] };
+    return { name: dur[3], section: "완료", status: "done", start, end, children: [], hasLongMarker: false };
   }
   return null;
 }
@@ -231,18 +235,18 @@ function parseDroppedLine(line: string, year: number): TimelineItem | null {
   const imm = DROPPED_IMMEDIATE_RE.exec(line);
   if (imm) {
     const end = new Date(year, parseInt(imm[1], 10) - 1, parseInt(imm[2], 10));
-    return { name: imm[3], section: "드롭", status: "crit", start: end, end, children: [] };
+    return { name: imm[3], section: "드롭", status: "crit", start: end, end, children: [], hasLongMarker: false };
   }
   const withOrigin = DROPPED_WITH_ORIGIN_RE.exec(line);
   if (withOrigin) {
     const end = new Date(year, parseInt(withOrigin[1], 10) - 1, parseInt(withOrigin[2], 10));
     const start = new Date(year, parseInt(withOrigin[4], 10) - 1, parseInt(withOrigin[5], 10));
-    return { name: withOrigin[3], section: "드롭", status: "crit", start, end, children: [] };
+    return { name: withOrigin[3], section: "드롭", status: "crit", start, end, children: [], hasLongMarker: false };
   }
   const noOrigin = DROPPED_NO_ORIGIN_RE.exec(line);
   if (noOrigin) {
     const end = new Date(year, parseInt(noOrigin[1], 10) - 1, parseInt(noOrigin[2], 10));
-    return { name: noOrigin[3], section: "드롭", status: "crit", start: end, end, children: [] };
+    return { name: noOrigin[3], section: "드롭", status: "crit", start: end, end, children: [], hasLongMarker: false };
   }
   return null;
 }
