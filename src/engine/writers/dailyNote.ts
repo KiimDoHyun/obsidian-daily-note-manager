@@ -5,9 +5,7 @@ import {
   SECTION_MEMO,
   SECTION_TODO_NEW,
   WARN_ORANGE,
-  WARN_ORANGE_DAY,
   WARN_RED,
-  WARN_RED_DAY,
 } from "../constants";
 import { mmddOf, toIsoDate } from "../dateutil";
 import { monthlyDropWikilink, monthlySummaryWikilink } from "../paths";
@@ -20,7 +18,12 @@ export function renderDailyNote(
   settings: DailyNoteSettings,
 ): string {
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
-  const carryBody = sorted.map(renderSingleBlock).flat().join("\n");
+  const warnOrange = settings.warnThresholdDays;
+  const warnRed = settings.warnThresholdDays + 1;
+  const carryBody = sorted
+    .map((b) => renderSingleBlock(b, warnOrange, warnRed))
+    .flat()
+    .join("\n");
   const footer = FOOTER_TEMPLATE.replace("{summary_link}", monthlySummaryWikilink(today, settings))
     .replace("{drop_link}", monthlyDropWikilink(today, settings));
 
@@ -44,20 +47,20 @@ export function renderDailyNote(
   return parts.join("\n");
 }
 
-function renderSingleBlock(block: TaskBlock): string[] {
-  return [renderTopLine(block), ...block.children];
+function renderSingleBlock(block: TaskBlock, warnOrange: number, warnRed: number): string[] {
+  return [renderTopLine(block, warnOrange, warnRed), ...block.children];
 }
 
-function renderTopLine(block: TaskBlock): string {
+function renderTopLine(block: TaskBlock, warnOrange: number, warnRed: number): string {
   const origin = block.originDate ? mmddOf(block.originDate) : "??-??";
   const tag = `(${block.carryoverDays}일째 이월, ${origin}~)`;
   let prefix = "";
   let suffix = "";
   if (!block.hasLongMarker) {
-    if (block.carryoverDays === WARN_ORANGE_DAY) {
+    if (block.carryoverDays === warnOrange) {
       prefix = `${WARN_ORANGE} `;
       suffix = ` ${DROP_WARNING_SUFFIX}`;
-    } else if (block.carryoverDays >= WARN_RED_DAY) {
+    } else if (block.carryoverDays >= warnRed) {
       prefix = `${WARN_RED} `;
       suffix = ` ${DROP_WARNING_SUFFIX}`;
     }

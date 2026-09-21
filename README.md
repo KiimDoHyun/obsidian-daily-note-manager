@@ -11,6 +11,8 @@ Automates the daily-note task lifecycle in Obsidian: carry, warn, drop, archive.
 
 ## What a daily note looks like
 
+![Daily note](./assets/daily-note.png)
+
 Yesterday (March 19) had these tasks:
 
 ```markdown
@@ -51,13 +53,18 @@ Left ribbon → calendar icon → this month's Gantt chart.
 - Bar colors: blue in-progress / green complete / gray dropped
 - Click a bar → jump to the daily note where the task first appeared
 - Weekend dividers and a today marker on the axis
+- Hover a bar → tooltip with the full task text and its subtasks/notes
+
+![Timeline](./assets/timeline.png)
+
+Hover state shows the task's subtasks and duration:
+
+![Timeline tooltip](./assets/timeline-tooltip.png)
 
 The monthly summary document also embeds a Mermaid Gantt snapshot that refreshes each day.
 
 - View it from Reading mode without opening the custom view
 - Renders on mobile
-
-> Screenshot placeholder (`assets/timeline.png`)
 
 ## Folder layout
 
@@ -98,9 +105,11 @@ Download `main.js`, `manifest.json`, and `styles.css` from the [Releases](https:
 
 Under Settings → Community plugins → Daily Note Manager:
 
+![Settings](./assets/settings.png)
+
 - Notes subfolder (default `Notes`)
 - Drop threshold in business days (default 5)
-- Warning threshold in business days (default 3)
+- Warning threshold in business days (default 3) — day N shows 🟠, N+1 shows 🔴
 - Skip weekend on/off
 - Max catch-up days on app load (default 14)
 - **Language / 언어** — UI language (ribbon, commands, notices, settings labels, timeline view). Note file contents (section headers, carryover suffixes, monthly summary, etc.) always stay in Korean format regardless of this setting.
@@ -148,6 +157,8 @@ MIT
 
 ## 실제 노트는 이렇게 생깁니다
 
+![데일리 노트](./assets/daily-note.png)
+
 어제 3월 19일 노트에 이런 항목이 남아 있었다고 하자.
 
 ```markdown
@@ -188,13 +199,18 @@ MIT
 - 막대 색: 진행 중 파랑 / 완료 초록 / 드롭 회색
 - 막대 클릭 → 해당 항목이 처음 등장한 데일리 노트로 이동
 - 주말은 세로선, 오늘은 별도 마커
+- 막대에 마우스 hover → 하위 항목·메모까지 상세 툴팁
+
+![타임라인](./assets/timeline.png)
+
+Hover 시 하위 항목과 소요일 확인:
+
+![툴팁](./assets/timeline-tooltip.png)
 
 월간 종합 문서에도 Mermaid 간트 스냅샷이 매일 자동 갱신된다.
 
 - 별도 뷰 없이 종합 문서 스크롤로 확인
 - 모바일에서도 렌더링
-
-> 스크린샷 자리 (`assets/timeline.png`)
 
 ## 폴더 구조
 
@@ -235,9 +251,11 @@ Notes/
 
 설정 → 커뮤니티 플러그인 → Daily Note Manager.
 
+![설정](./assets/settings.png)
+
 - 노트 하위 폴더 (기본 `Notes`)
 - 드롭 임계일 (기본 5영업일)
-- 경고 임계일 (기본 3영업일)
+- 경고 임계일 (기본 3영업일) — N일째는 🟠, N+1일째부터 🔴
 - 주말 스킵 여부
 - 앱 로드 시 catch-up 최대 일수 (기본 14일)
 - **언어 / Language** — UI(리본·명령·알림·설정 라벨·타임라인 뷰) 언어. 노트 파일 내용(섹션 헤더·이월 접미사·월간 종합 등)은 이 설정과 무관하게 항상 한국어 포맷.

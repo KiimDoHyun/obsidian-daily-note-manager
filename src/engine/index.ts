@@ -196,7 +196,7 @@ export class Engine {
       effectivePrevDate = fallback;
     }
 
-    const events = classifyEvents(parsed);
+    const events = classifyEvents(parsed, this.settings.dropThresholdDays);
 
     if (dryRun) {
       return this.result("dry_run", today, todayPath, effectivePrevDate, prevPath, events, "dry-run");
