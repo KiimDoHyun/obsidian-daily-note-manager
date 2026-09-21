@@ -162,6 +162,7 @@ export class TimelineView extends ItemView {
     svg.classList.add("dnm-svg");
     chartCol.appendChild(svg);
 
+    this.defineWeekendStripePattern(svg);
     this.drawWeekendBackgrounds(svg, first, daysInMonth, chartTotalHeight);
     this.drawWeekendBorders(svg, first, daysInMonth, chartTotalHeight);
     this.drawDayHeaders(svg, first, daysInMonth);
@@ -199,47 +200,53 @@ export class TimelineView extends ItemView {
 
       const range = this.clipRangeToMonth(item, first, daysInMonth);
       if (range !== null) {
-        const segments = this.computeBusinessDaySegments(
-          range.startDay,
-          range.endDay,
-          first,
-        );
+        const { startDay, endDay } = range;
+        const x = (startDay - 1) * DAY_WIDTH + 2;
+        const w = Math.max((endDay - startDay + 1) * DAY_WIDTH - 4, 4);
         const barY = y + (ROW_HEIGHT - BAR_HEIGHT) / 2;
-        let widest = { x: 0, w: 0 };
 
-        for (const seg of segments) {
-          const x = (seg.startDay - 1) * DAY_WIDTH + 2;
-          const w = Math.max((seg.endDay - seg.startDay + 1) * DAY_WIDTH - 4, 4);
-          const bar = svgEl("rect");
-          bar.classList.add("dnm-bar");
-          bar.setAttribute("x", String(x));
-          bar.setAttribute("y", String(barY));
-          bar.setAttribute("width", String(w));
-          bar.setAttribute("height", String(BAR_HEIGHT));
-          bar.setAttribute("rx", "3");
-          bar.setAttribute("fill", this.colorFor(item.status));
-          bar.addEventListener("click", () => this.openDailyNoteFor(item));
-          bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
-          bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
-          bar.addEventListener("mouseleave", () => this.hideTooltip());
-          rowGroup.appendChild(bar);
-          if (w > widest.w) widest = { x, w };
+        // 1) 연속 막대 (캘린더 스팬)
+        const bar = svgEl("rect");
+        bar.classList.add("dnm-bar");
+        bar.setAttribute("x", String(x));
+        bar.setAttribute("y", String(barY));
+        bar.setAttribute("width", String(w));
+        bar.setAttribute("height", String(BAR_HEIGHT));
+        bar.setAttribute("rx", "3");
+        bar.setAttribute("fill", this.colorFor(item.status));
+        bar.addEventListener("click", () => this.openDailyNoteFor(item));
+        bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
+        bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
+        bar.addEventListener("mouseleave", () => this.hideTooltip());
+        rowGroup.appendChild(bar);
+
+        // 2) 막대 안에 낀 주말 컬럼 위에 대각 줄무늬 오버레이
+        //    → "이 부분은 주말이라 실제로는 진행 안 됨" 을 시각적으로 표현
+        for (let d = startDay; d <= endDay; d++) {
+          const day = new Date(first.getFullYear(), first.getMonth(), d);
+          if (!isWeekend(day)) continue;
+          const ox = (d - 1) * DAY_WIDTH;
+          const overlay = svgEl("rect");
+          overlay.classList.add("dnm-bar-weekend");
+          overlay.setAttribute("x", String(ox));
+          overlay.setAttribute("y", String(barY));
+          overlay.setAttribute("width", String(DAY_WIDTH));
+          overlay.setAttribute("height", String(BAR_HEIGHT));
+          overlay.setAttribute("fill", "url(#dnm-weekend-stripes)");
+          overlay.style.pointerEvents = "none";
+          rowGroup.appendChild(overlay);
         }
 
-        // 라벨은 가장 넓은 세그먼트에 배치. 여러 세그먼트로 나뉜 경우에도
-        // 전체 영업일 수를 표시 (라벨과 시각 폭이 일치하는 단일 세그먼트에서 가장 자연스러움).
-        if (widest.w > 0) {
-          const duration = this.durationDisplay(item, widest.w);
-          if (duration) {
-            const dur = svgEl("text");
-            dur.classList.add("dnm-duration");
-            dur.setAttribute("x", String(widest.x + widest.w / 2));
-            dur.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
-            dur.setAttribute("text-anchor", "middle");
-            dur.setAttribute("font-size", "11");
-            dur.textContent = duration;
-            rowGroup.appendChild(dur);
-          }
+        const duration = this.durationDisplay(item, w);
+        if (duration) {
+          const dur = svgEl("text");
+          dur.classList.add("dnm-duration");
+          dur.setAttribute("x", String(x + w / 2));
+          dur.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
+          dur.setAttribute("text-anchor", "middle");
+          dur.setAttribute("font-size", "11");
+          dur.textContent = duration;
+          rowGroup.appendChild(dur);
         }
       }
 
@@ -404,30 +411,33 @@ export class TimelineView extends ItemView {
     svg.appendChild(label);
   }
 
-  /**
-   * 이번 달 구간 안에서 영업일 연속 세그먼트로 분할.
-   * 주말 컬럼은 막대에서 제외 → "3영업일 = 3칸" 의 시각적 일관성 확보.
-   */
-  private computeBusinessDaySegments(
-    startDay: number,
-    endDay: number,
-    first: Date,
-  ): Array<{ startDay: number; endDay: number }> {
-    const segments: Array<{ startDay: number; endDay: number }> = [];
-    let curStart: number | null = null;
-    for (let d = startDay; d <= endDay; d++) {
-      const day = new Date(first.getFullYear(), first.getMonth(), d);
-      if (isWeekend(day)) {
-        if (curStart !== null) {
-          segments.push({ startDay: curStart, endDay: d - 1 });
-          curStart = null;
-        }
-      } else if (curStart === null) {
-        curStart = d;
-      }
-    }
-    if (curStart !== null) segments.push({ startDay: curStart, endDay });
-    return segments;
+  /** 주말 표시용 대각 줄무늬 패턴을 SVG defs 에 한 번 등록. */
+  private defineWeekendStripePattern(svg: SVGSVGElement): void {
+    const defs = svgEl("defs");
+    const pattern = svgEl("pattern");
+    pattern.setAttribute("id", "dnm-weekend-stripes");
+    pattern.setAttribute("width", "6");
+    pattern.setAttribute("height", "6");
+    pattern.setAttribute("patternUnits", "userSpaceOnUse");
+    pattern.setAttribute("patternTransform", "rotate(-45)");
+
+    const bg = svgEl("rect");
+    bg.setAttribute("width", "6");
+    bg.setAttribute("height", "6");
+    bg.setAttribute("fill", "rgba(255,255,255,0)");
+    pattern.appendChild(bg);
+
+    const line = svgEl("line");
+    line.setAttribute("x1", "0");
+    line.setAttribute("y1", "0");
+    line.setAttribute("x2", "0");
+    line.setAttribute("y2", "6");
+    line.setAttribute("stroke", "rgba(255,255,255,0.5)");
+    line.setAttribute("stroke-width", "3");
+    pattern.appendChild(line);
+
+    defs.appendChild(pattern);
+    svg.appendChild(defs);
   }
 
   private clipRangeToMonth(
