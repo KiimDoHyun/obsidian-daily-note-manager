@@ -1,1 +1,166 @@
-/* Daily Note Manager 전용 스타일. 필요 시 여기에 추가. */
+/* Daily Note Manager — Timeline View 스타일 */
+
+.dnm-timeline-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dnm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.dnm-toolbar .dnm-ym {
+  font-weight: 600;
+  min-width: 80px;
+  text-align: center;
+}
+
+.dnm-toolbar .dnm-spacer {
+  flex: 1;
+}
+
+.dnm-legend {
+  display: flex;
+  gap: 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.dnm-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dnm-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.dnm-legend-hint {
+  margin-left: auto;
+}
+
+.dnm-empty {
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ------- 차트 본체 ------- */
+
+.dnm-chart-wrap {
+  display: flex;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* 좌측 라벨 컬럼 (가로 스크롤 영향 없음) */
+.dnm-labels-col {
+  flex-shrink: 0;
+  border-right: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.dnm-labels-header {
+  border-bottom: 1px solid var(--background-modifier-border);
+  position: sticky;
+  top: 0;
+  background: var(--background-primary);
+  z-index: 3;
+}
+
+.dnm-labels-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dnm-row-label {
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: default;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.08s ease;
+}
+
+.dnm-row-label.dnm-hovered {
+  background: var(--background-modifier-hover);
+}
+
+/* 우측 차트 컬럼 (가로 스크롤) */
+.dnm-chart-col {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dnm-svg {
+  display: block;
+  font-family: var(--font-interface);
+  font-size: 12px;
+}
+
+.dnm-weekend {
+  fill: var(--background-secondary);
+}
+
+.dnm-day-of-week {
+  fill: var(--text-muted);
+}
+
+.dnm-day-num {
+  fill: var(--text-normal);
+}
+
+.dnm-row-bg {
+  fill: transparent;
+  pointer-events: all;
+  transition: fill 0.08s ease;
+}
+
+.dnm-row.dnm-hovered .dnm-row-bg,
+.dnm-row:hover .dnm-row-bg {
+  fill: var(--background-modifier-hover);
+}
+
+.dnm-bar {
+  cursor: pointer;
+  opacity: 0.9;
+  transition: opacity 0.1s ease;
+}
+
+.dnm-bar:hover {
+  opacity: 1;
+}
+
+.dnm-check {
+  fill: white;
+  pointer-events: none;
+}
+
+.dnm-today-label {
+  pointer-events: none;
+}
