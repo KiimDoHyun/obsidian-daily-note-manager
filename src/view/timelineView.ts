@@ -30,6 +30,7 @@ const SECTION_GAP = 8;
 
 export class TimelineView extends ItemView {
   private currentMonth: Date;
+  private tooltipEl: HTMLDivElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: DailyNoteManagerPlugin) {
     super(leaf);
@@ -62,6 +63,8 @@ export class TimelineView extends ItemView {
     this.renderToolbar();
     this.renderLegend();
     this.renderChart(items);
+    this.tooltipEl = this.contentEl.createDiv({ cls: "dnm-tooltip" });
+    this.tooltipEl.style.display = "none";
   }
 
   private renderToolbar(): void {
@@ -185,10 +188,10 @@ export class TimelineView extends ItemView {
         bar.setAttribute("height", String(BAR_HEIGHT));
         bar.setAttribute("rx", "3");
         bar.setAttribute("fill", this.colorFor(item.status));
-        const barTitle = svgEl("title");
-        barTitle.textContent = `${item.name}\n${item.section} · ${this.rangeText(item)}`;
-        bar.appendChild(barTitle);
         bar.addEventListener("click", () => this.openDailyNoteFor(item));
+        bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
+        bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
+        bar.addEventListener("mouseleave", () => this.hideTooltip());
         rowGroup.appendChild(bar);
 
         // 소요일 텍스트. 막대가 너무 좁으면 생략.
@@ -382,6 +385,59 @@ export class TimelineView extends ItemView {
     if (n <= 1) return "당일";
     if (item.status === "active") return `${n}일째`;
     return `${n}일`;
+  }
+
+  private showTooltip(item: TimelineItem, evt: MouseEvent): void {
+    const el = this.tooltipEl;
+    if (!el) return;
+    el.empty();
+
+    const title = el.createDiv({ cls: "dnm-tt-title" });
+    title.setText(item.name);
+
+    const meta = el.createDiv({ cls: "dnm-tt-meta" });
+    const sectionMark = item.section === "진행중" ? "🔵" : item.section === "완료" ? "🟢" : "⚫";
+    meta.setText(`${sectionMark} ${item.section} · ${this.durationText(item)} · ${this.rangeText(item)}`);
+
+    if (item.children.length > 0) {
+      const pre = el.createEl("pre", { cls: "dnm-tt-children" });
+      pre.setText(item.children.map((l) => l.replace(/\t/g, "    ")).join("\n"));
+    } else if (item.section !== "진행중") {
+      const empty = el.createDiv({ cls: "dnm-tt-empty" });
+      empty.setText("하위 항목 없음");
+    }
+
+    const hint = el.createDiv({ cls: "dnm-tt-hint" });
+    hint.setText("클릭하면 시작일 데일리 노트로 이동");
+
+    el.style.display = "block";
+    this.positionTooltip(evt);
+  }
+
+  private positionTooltip(evt: MouseEvent): void {
+    const el = this.tooltipEl;
+    if (!el || el.style.display === "none") return;
+    const container = this.contentEl.getBoundingClientRect();
+    const relX = evt.clientX - container.left;
+    const relY = evt.clientY - container.top;
+    const ttRect = el.getBoundingClientRect();
+    const offset = 14;
+
+    let x = relX + offset;
+    let y = relY + offset;
+
+    if (x + ttRect.width > container.width - 8) {
+      x = Math.max(8, relX - ttRect.width - offset);
+    }
+    if (y + ttRect.height > container.height - 8) {
+      y = Math.max(8, container.height - ttRect.height - 8);
+    }
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  }
+
+  private hideTooltip(): void {
+    if (this.tooltipEl) this.tooltipEl.style.display = "none";
   }
 
   private async openDailyNoteFor(item: TimelineItem): Promise<void> {

@@ -13,6 +13,8 @@ export interface TimelineItem {
   status: TimelineStatus;
   start: Date;
   end: Date;
+  /** 원본 데일리 노트에 있던 하위 항목/메모 (들여쓰기 유지된 raw 라인들) */
+  children: string[];
 }
 
 const COMPLETED_SAMEDAY_RE = /^- (\d{2})-(\d{2}) (.+?) \(당일\)$/;
@@ -55,7 +57,11 @@ export async function collectTimelineItems(
   const summaryP = monthlySummaryPath(month, settings);
   if (vault.exists(summaryP)) {
     const raw = await vault.read(summaryP);
-    items.push(...extractFromSummary(raw, month.getFullYear()));
+    const summaryItems = extractFromSummary(raw, month.getFullYear());
+    for (const item of summaryItems) {
+      await attachChildrenFromEventNote(item, vault, settings);
+      items.push(item);
+    }
   }
 
   const today = todayDate();
@@ -72,12 +78,39 @@ export async function collectTimelineItems(
             status: "active",
             start: block.originDate,
             end: today,
+            children: block.children,
           });
         }
       }
     }
   }
   return items;
+}
+
+/**
+ * 완료/드롭 이벤트 라인에는 children 정보가 없으므로,
+ * 이벤트 발생일의 데일리 노트를 파싱해 같은 name 을 가진 블록의 children 을 복원.
+ */
+async function attachChildrenFromEventNote(
+  item: TimelineItem,
+  vault: VaultAdapter,
+  settings: DailyNoteSettings,
+): Promise<void> {
+  const notePath = dailyNotePath(item.end, settings);
+  if (!vault.exists(notePath)) return;
+  try {
+    const raw = await vault.read(notePath);
+    const parsed = parseDailyNoteText(raw, item.end);
+    const all = [...parsed.activeBlocks, ...parsed.carryoverBlocks];
+    for (const block of all) {
+      if (block.topText === item.name) {
+        item.children = block.children;
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("[daily-note] attachChildrenFromEventNote failed", item.name, err);
+  }
 }
 
 function replaceOrInsertTimeline(raw: string, block: string[]): string {
@@ -183,13 +216,13 @@ function parseCompletedLine(line: string, year: number): TimelineItem | null {
   const same = COMPLETED_SAMEDAY_RE.exec(line);
   if (same) {
     const end = new Date(year, parseInt(same[1], 10) - 1, parseInt(same[2], 10));
-    return { name: same[3], section: "완료", status: "done", start: end, end };
+    return { name: same[3], section: "완료", status: "done", start: end, end, children: [] };
   }
   const dur = COMPLETED_DURATION_RE.exec(line);
   if (dur) {
     const end = new Date(year, parseInt(dur[1], 10) - 1, parseInt(dur[2], 10));
     const start = new Date(year, parseInt(dur[5], 10) - 1, parseInt(dur[6], 10));
-    return { name: dur[3], section: "완료", status: "done", start, end };
+    return { name: dur[3], section: "완료", status: "done", start, end, children: [] };
   }
   return null;
 }
@@ -198,18 +231,18 @@ function parseDroppedLine(line: string, year: number): TimelineItem | null {
   const imm = DROPPED_IMMEDIATE_RE.exec(line);
   if (imm) {
     const end = new Date(year, parseInt(imm[1], 10) - 1, parseInt(imm[2], 10));
-    return { name: imm[3], section: "드롭", status: "crit", start: end, end };
+    return { name: imm[3], section: "드롭", status: "crit", start: end, end, children: [] };
   }
   const withOrigin = DROPPED_WITH_ORIGIN_RE.exec(line);
   if (withOrigin) {
     const end = new Date(year, parseInt(withOrigin[1], 10) - 1, parseInt(withOrigin[2], 10));
     const start = new Date(year, parseInt(withOrigin[4], 10) - 1, parseInt(withOrigin[5], 10));
-    return { name: withOrigin[3], section: "드롭", status: "crit", start, end };
+    return { name: withOrigin[3], section: "드롭", status: "crit", start, end, children: [] };
   }
   const noOrigin = DROPPED_NO_ORIGIN_RE.exec(line);
   if (noOrigin) {
     const end = new Date(year, parseInt(noOrigin[1], 10) - 1, parseInt(noOrigin[2], 10));
-    return { name: noOrigin[3], section: "드롭", status: "crit", start: end, end };
+    return { name: noOrigin[3], section: "드롭", status: "crit", start: end, end, children: [] };
   }
   return null;
 }
