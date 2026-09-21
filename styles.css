@@ -48,6 +48,16 @@
   border-radius: 2px;
 }
 
+.dnm-legend-badge {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
 .dnm-legend-hint {
   margin-left: auto;
 }

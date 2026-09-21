@@ -78,7 +78,7 @@ export class TimelineView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass("dnm-timeline-view");
     this.renderToolbar();
-    this.renderLegend();
+    this.renderLegend(items);
     this.renderChart(items);
     this.tooltipEl = this.contentEl.createDiv({ cls: "dnm-tooltip" });
     this.tooltipEl.style.display = "none";
@@ -112,17 +112,34 @@ export class TimelineView extends ItemView {
     refresh.onclick = () => this.rerender();
   }
 
-  private renderLegend(): void {
+  private renderLegend(items: TimelineItem[]): void {
+    const active = items.filter((i) => i.section === "진행중").length;
+    const done = items.filter((i) => i.section === "완료").length;
+    const dropped = items.filter((i) => i.section === "드롭").length;
+    const longTerm = items.filter(
+      (i) => i.section === "진행중" && i.hasLongMarker,
+    ).length;
+
     const legend = this.contentEl.createDiv({ cls: "dnm-legend" });
-    const item = (color: string, label: string) => {
+
+    const swatchItem = (color: string, label: string, count: number) => {
       const wrap = legend.createDiv({ cls: "dnm-legend-item" });
       const swatch = wrap.createDiv({ cls: "dnm-legend-swatch" });
       swatch.style.background = color;
-      wrap.createSpan({ text: label });
+      wrap.createSpan({ text: `${label} ${count}` });
     };
-    item(COLOR_ACTIVE, t("legendActive", this.locale));
-    item(COLOR_DONE, t("legendDone", this.locale));
-    item(COLOR_DROPPED, t("legendDropped", this.locale));
+
+    const badgeItem = (label: string, count: number) => {
+      const wrap = legend.createDiv({ cls: "dnm-legend-item" });
+      wrap.createSpan({ text: label, cls: "dnm-legend-badge" });
+      wrap.createSpan({ text: String(count) });
+    };
+
+    swatchItem(COLOR_ACTIVE, t("legendActive", this.locale), active);
+    swatchItem(COLOR_DONE, t("legendDone", this.locale), done);
+    swatchItem(COLOR_DROPPED, t("legendDropped", this.locale), dropped);
+    badgeItem(t("longTermLabel", this.locale), longTerm);
+
     legend.createSpan({ text: t("legendHint", this.locale), cls: "dnm-legend-hint" });
   }
 
