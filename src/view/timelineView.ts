@@ -481,10 +481,11 @@ export class TimelineView extends ItemView {
     if (item.status !== "active") return "";
     if (item.hasLongMarker) return "";
     const n = businessDaysInSpan(item.start, item.end);
-    const warnOrange = this.plugin.settings.warnThresholdDays;
-    const warnRed = warnOrange + 1;
+    const drop = this.plugin.settings.dropThresholdDays;
+    const warnOrange = Math.max(1, drop - this.plugin.settings.warnOrangeDaysBeforeDrop);
+    const warnRed = Math.max(1, drop - this.plugin.settings.warnRedDaysBeforeDrop);
     if (n >= warnRed) return "🔴";
-    if (n === warnOrange) return "🟠";
+    if (n >= warnOrange) return "🟠";
     return "";
   }
 

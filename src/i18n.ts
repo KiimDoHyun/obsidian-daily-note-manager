@@ -142,10 +142,18 @@ const M = {
     ko: "이월이 이 일수를 넘으면 월간 드롭 문서로 이동 (기본 5)",
     en: "Tasks carrying over more than this many business days move to the monthly drop doc (default 5)",
   },
-  setWarnThresholdName: { ko: "경고 임계 (일)", en: "Warning threshold (days)" },
-  setWarnThresholdDesc: {
-    ko: "이월이 이 일수 이상이면 🟠/🔴 경고 표시 (기본 3)",
-    en: "Show 🟠/🔴 warning when carryover reaches this many days (default 3)",
+  setWarnRedName: { ko: "🔴 경고 (드롭 N일 전)", en: "🔴 warning (N days before drop)" },
+  setWarnRedDesc: {
+    ko: "드롭 임계 N일 전부터 🔴 표시. 기본 1 (드롭 하루 전).",
+    en: "Show 🔴 starting N business days before drop. Default 1 (day before drop).",
+  },
+  setWarnOrangeName: {
+    ko: "🟠 경고 (드롭 N일 전)",
+    en: "🟠 warning (N days before drop)",
+  },
+  setWarnOrangeDesc: {
+    ko: "드롭 임계 N일 전부터 🟠 표시. 기본 2 (드롭 이틀 전). 🔴 값보다 크게 설정 (더 일찍 시작).",
+    en: "Show 🟠 starting N business days before drop. Default 2 (two days before drop). Must be greater than the 🔴 value.",
   },
   setArchiveFilenameName: { ko: "보관함 파일명", en: "Archive filename" },
   setArchiveFilenameDesc: {

@@ -18,8 +18,8 @@ export function renderDailyNote(
   settings: DailyNoteSettings,
 ): string {
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
-  const warnOrange = settings.warnThresholdDays;
-  const warnRed = settings.warnThresholdDays + 1;
+  const warnOrange = Math.max(1, settings.dropThresholdDays - settings.warnOrangeDaysBeforeDrop);
+  const warnRed = Math.max(1, settings.dropThresholdDays - settings.warnRedDaysBeforeDrop);
   const carryBody = sorted
     .map((b) => renderSingleBlock(b, warnOrange, warnRed))
     .flat()
@@ -57,11 +57,11 @@ function renderTopLine(block: TaskBlock, warnOrange: number, warnRed: number): s
   let prefix = "";
   let suffix = "";
   if (!block.hasLongMarker) {
-    if (block.carryoverDays === warnOrange) {
-      prefix = `${WARN_ORANGE} `;
-      suffix = ` ${DROP_WARNING_SUFFIX}`;
-    } else if (block.carryoverDays >= warnRed) {
+    if (block.carryoverDays >= warnRed) {
       prefix = `${WARN_RED} `;
+      suffix = ` ${DROP_WARNING_SUFFIX}`;
+    } else if (block.carryoverDays >= warnOrange) {
+      prefix = `${WARN_ORANGE} `;
       suffix = ` ${DROP_WARNING_SUFFIX}`;
     }
   }

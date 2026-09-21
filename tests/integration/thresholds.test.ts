@@ -92,13 +92,13 @@ describe("dropThresholdDays 설정 배선", () => {
   });
 });
 
-describe("warnThresholdDays 설정 배선", () => {
+describe("warn 오프셋 설정 배선 (드롭 기준 N일 전)", () => {
   let vault: InMemoryVault;
   beforeEach(() => {
     vault = new InMemoryVault();
   });
 
-  it("기본값 3: 3일째 이월 → 🟠 표시, 4일째 → 🔴 표시", async () => {
+  it("기본값 drop=5, orange=2일전(=day3), red=1일전(=day4): 3일째 🟠, 4일째 🔴", async () => {
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
       vault.seed(
@@ -107,8 +107,8 @@ describe("warnThresholdDays 설정 배선", () => {
           date: "2026-09-14",
           activeLines: [],
           carryoverLines: [
-            "- [ ] Orange (2일째 이월, 09-12~)", // 오늘 3일째
-            "- [ ] Red (3일째 이월, 09-11~)", // 오늘 4일째
+            "- [ ] Orange (2일째 이월, 09-12~)",
+            "- [ ] Red (3일째 이월, 09-11~)",
           ],
         }),
       );
@@ -119,37 +119,35 @@ describe("warnThresholdDays 설정 배선", () => {
     });
   });
 
-  it("커스텀 임계 2 + dropThresholdDays 10: 2일째 → 🟠, 3일째 → 🔴, 4일째도 🔴 (아직 드롭 임계 미달)", async () => {
+  it("drop=10 이면 기본 offset(2,1)로 orange=day8, red=day9 자동 조정", async () => {
     await withFixedToday("2026-09-15", async () => {
-      const { engine, settings } = makeEngine(vault, {
-        warnThresholdDays: 2,
-        dropThresholdDays: 10,
-      });
+      const { engine, settings } = makeEngine(vault, { dropThresholdDays: 10 });
       vault.seed(
         dailyNotePath(fromIsoDate("2026-09-14"), settings),
         makeDailyNoteMd({
           date: "2026-09-14",
           activeLines: [],
           carryoverLines: [
-            "- [ ] Warn1 (1일째 이월, 09-13~)", // 오늘 2일째 → 🟠
-            "- [ ] Warn2 (2일째 이월, 09-12~)", // 오늘 3일째 → 🔴
-            "- [ ] Warn3 (3일째 이월, 09-11~)", // 오늘 4일째 → 🔴
+            "- [ ] Chill (3일째 이월, 09-09~)",
+            "- [ ] Orange (7일째 이월, 09-04~)",
+            "- [ ] Red (8일째 이월, 09-03~)",
           ],
         }),
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/🟠 - \[ \] Warn1 \(2일째 이월/);
-      expect(md).toMatch(/🔴 - \[ \] Warn2 \(3일째 이월/);
-      expect(md).toMatch(/🔴 - \[ \] Warn3 \(4일째 이월/);
+      expect(md).not.toMatch(/🟠 - \[ \] Chill/);
+      expect(md).not.toMatch(/🔴 - \[ \] Chill/);
+      expect(md).toMatch(/🟠 - \[ \] Orange \(8일째 이월/);
+      expect(md).toMatch(/🔴 - \[ \] Red \(9일째 이월/);
     });
   });
 
-  it("커스텀 임계 5 + dropThresholdDays 10: 3일째·4일째 이월엔 경고 없음 (임계 미달)", async () => {
+  it("사용자 override: orange=3일전, red=1일전, drop=5 → day2 🟠, day4 🔴", async () => {
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault, {
-        warnThresholdDays: 5,
-        dropThresholdDays: 10,
+        warnOrangeDaysBeforeDrop: 3,
+        warnRedDaysBeforeDrop: 1,
       });
       vault.seed(
         dailyNotePath(fromIsoDate("2026-09-14"), settings),
@@ -157,16 +155,15 @@ describe("warnThresholdDays 설정 배선", () => {
           date: "2026-09-14",
           activeLines: [],
           carryoverLines: [
-            "- [ ] Chill (3일째 이월, 09-09~)", // 오늘 4일째 → 경고 없음
+            "- [ ] Early (1일째 이월, 09-13~)",
+            "- [ ] Late (3일째 이월, 09-11~)",
           ],
         }),
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).not.toContain("🟠");
-      expect(md).not.toContain("🔴");
-      expect(md).not.toContain("드롭 예정입니다");
-      expect(md).toContain("- [ ] Chill (4일째 이월, 09-09~)");
+      expect(md).toMatch(/🟠 - \[ \] Early \(2일째 이월/);
+      expect(md).toMatch(/🔴 - \[ \] Late \(4일째 이월/);
     });
   });
 });

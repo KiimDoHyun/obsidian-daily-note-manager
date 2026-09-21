@@ -5,7 +5,10 @@ import { resolveLocale, t, type LocaleSetting } from "./i18n";
 export interface DailyNoteSettings {
   notesSubdir: string;
   dropThresholdDays: number;
-  warnThresholdDays: number;
+  /** 빨강 경고 시작: 드롭 N일 전. 기본 1 (드롭 하루 전부터 🔴). */
+  warnRedDaysBeforeDrop: number;
+  /** 주황 경고 시작: 드롭 N일 전. 기본 2 (드롭 이틀 전부터 🟠). red 보다 더 커야 함 (더 이르게 시작). */
+  warnOrangeDaysBeforeDrop: number;
   archiveFileName: string;
   monthlySummarySuffix: string;
   monthlyDropSuffix: string;
@@ -22,7 +25,8 @@ export interface DailyNoteSettings {
 export const DEFAULT_SETTINGS: DailyNoteSettings = {
   notesSubdir: "Notes",
   dropThresholdDays: 5,
-  warnThresholdDays: 3,
+  warnRedDaysBeforeDrop: 1,
+  warnOrangeDaysBeforeDrop: 2,
   archiveFileName: "보관함.md",
   monthlySummarySuffix: "종합",
   monthlyDropSuffix: "드롭",
@@ -75,15 +79,30 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(t("setWarnThresholdName", lc))
-      .setDesc(t("setWarnThresholdDesc", lc))
+      .setName(t("setWarnRedName", lc))
+      .setDesc(t("setWarnRedDesc", lc))
       .addText((text) =>
         text
-          .setValue(String(this.plugin.settings.warnThresholdDays))
+          .setValue(String(this.plugin.settings.warnRedDaysBeforeDrop))
           .onChange(async (value) => {
             const n = parseInt(value, 10);
-            if (Number.isFinite(n) && n > 0) {
-              this.plugin.settings.warnThresholdDays = n;
+            if (Number.isFinite(n) && n >= 0) {
+              this.plugin.settings.warnRedDaysBeforeDrop = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(t("setWarnOrangeName", lc))
+      .setDesc(t("setWarnOrangeDesc", lc))
+      .addText((text) =>
+        text
+          .setValue(String(this.plugin.settings.warnOrangeDaysBeforeDrop))
+          .onChange(async (value) => {
+            const n = parseInt(value, 10);
+            if (Number.isFinite(n) && n >= 0) {
+              this.plugin.settings.warnOrangeDaysBeforeDrop = n;
               await this.plugin.saveSettings();
             }
           }),

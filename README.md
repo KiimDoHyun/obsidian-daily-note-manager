@@ -109,7 +109,9 @@ Under Settings → Community plugins → Daily Note Manager:
 
 - Notes subfolder (default `Notes`)
 - Drop threshold in business days (default 5)
-- Warning threshold in business days (default 3) — day N shows 🟠, N+1 shows 🔴
+- 🔴 warning starts N business days before drop (default 1 → day before drop)
+- 🟠 warning starts N business days before drop (default 2 → two days before drop)
+  - Offsets scale with the drop threshold: if you change drop to 7, warnings shift to day 5/6 automatically
 - Skip weekend on/off
 - Max catch-up days on app load (default 14)
 - **Language / 언어** — UI language (ribbon, commands, notices, settings labels, timeline view). Note file contents (section headers, carryover suffixes, monthly summary, etc.) always stay in Korean format regardless of this setting.
@@ -255,7 +257,9 @@ Notes/
 
 - 노트 하위 폴더 (기본 `Notes`)
 - 드롭 임계일 (기본 5영업일)
-- 경고 임계일 (기본 3영업일) — N일째는 🟠, N+1일째부터 🔴
+- 🔴 경고 시작: 드롭 N일 전 (기본 1 → 드롭 하루 전)
+- 🟠 경고 시작: 드롭 N일 전 (기본 2 → 드롭 이틀 전)
+  - 드롭 임계일이 변경되면 경고 시점도 자동으로 따라감 (드롭 7일이면 5·6일째부터 경고)
 - 주말 스킵 여부
 - 앱 로드 시 catch-up 최대 일수 (기본 14일)
 - **언어 / Language** — UI(리본·명령·알림·설정 라벨·타임라인 뷰) 언어. 노트 파일 내용(섹션 헤더·이월 접미사·월간 종합 등)은 이 설정과 무관하게 항상 한국어 포맷.
