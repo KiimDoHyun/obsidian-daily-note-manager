@@ -1,8 +1,13 @@
 # Obsidian Daily Note Manager
 
-Automatically carry unfinished tasks between daily notes, warn when they linger, and drop or archive them by a monthly policy.
+Automates the daily-note task lifecycle in Obsidian: carry, warn, drop, archive.
 
-Every morning when you open Obsidian, today's note is already there. Unfinished tasks from yesterday sit in the "Carried over" section with a counter showing how many days you've been holding them. After five business days, tasks that haven't been finished move out to a monthly drop document. Completed ones log into a monthly summary. A Gantt chart in the ribbon shows the whole month at a glance.
+- Yesterday's unfinished tasks land in today's "Carried over" section
+- Each carried task shows how many days it's been open
+- Days 3–4: 🟠 / 🔴 warnings appear
+- Day 5+: task moves to the month's drop document
+- Completed tasks log into the monthly summary
+- Ribbon calendar icon: this month's Gantt chart
 
 ## What a daily note looks like
 
@@ -25,7 +30,11 @@ Today's note is generated automatically like this:
 ## 💬 메모
 ```
 
-Once "Clean up the API response schema" reaches day 3 or 4, a 🟠 or 🔴 warning appears next to it along with a "will be dropped soon" note. On day 5 it disappears from today's note and moves to `2026-03 드롭.md`. The completed "PR review" is logged in `2026-03 종합.md`, ready for month-end review.
+What happens next to each task:
+
+- Days 3–4: prefix flips to 🟠 / 🔴 with a "will be dropped soon" note
+- Day 5+: task disappears from today's note → moves to `2026-03 드롭.md`
+- The completed "PR review": logged in `2026-03 종합.md` for month-end review
 
 ## Overriding the policy
 
@@ -37,9 +46,16 @@ Three markers on a task line change how it's handled:
 
 ## Timeline view
 
-Click the calendar icon in the left ribbon to open a Gantt chart of the current month. Bars are colored by status: blue for in-progress, green for complete, gray for dropped. Clicking a bar jumps to the daily note where the task first appeared. Weekends are marked with vertical dividers and today has its own marker.
+Left ribbon → calendar icon → this month's Gantt chart.
 
-The monthly summary document also embeds a Mermaid Gantt snapshot that refreshes each day, so you can see the same timeline from Reading mode — including on mobile.
+- Bar colors: blue in-progress / green complete / gray dropped
+- Click a bar → jump to the daily note where the task first appeared
+- Weekend dividers and a today marker on the axis
+
+The monthly summary document also embeds a Mermaid Gantt snapshot that refreshes each day.
+
+- View it from Reading mode without opening the custom view
+- Renders on mobile
 
 > Screenshot placeholder (`assets/timeline.png`)
 
@@ -58,11 +74,13 @@ Notes/
 보관함.md
 ```
 
-Weeks start on Monday, and the week containing day 1 is week 1. New folders are created when the month rolls over.
+- Weeks start on Monday. The week containing day 1 is week 1.
+- New month/year folders are created automatically.
 
 ## When it runs
 
-While Obsidian is open, the plugin checks every 60 seconds whether today's note exists. If Obsidian was closed for several days, the next launch catches up by processing missed business days one by one (up to 14 by default).
+- While Obsidian is open: checks every 60 seconds whether today's note exists
+- After a gap (Obsidian was closed for days): catches up by processing missed business days in order, up to 14 by default
 
 ## Install
 
@@ -118,9 +136,14 @@ MIT
 
 # 한국어
 
-옵시디언 데일리 노트에 쌓이는 할일을 자동으로 이월하고, 오래 붙들고 있으면 경고하고, 정해진 기준을 넘으면 드롭하거나 보관하는 플러그인.
+옵시디언 데일리 노트의 할일 라이프사이클(이월·경고·드롭·보관)을 자동화하는 플러그인.
 
-매일 아침 옵시디언을 열면 오늘 날짜 노트가 이미 만들어져 있다. 어제 끝내지 못한 할일은 새 노트의 "이월된 할일" 자리에 옮겨져 있고, 며칠째 붙들고 있는지 옆에 숫자가 붙는다. 5영업일이 지나도 끝나지 않은 항목은 그 달의 드롭 문서로 알아서 빠져나가고, 완료한 항목은 월간 종합 문서에 로그로 쌓인다. 리본의 달력 아이콘을 누르면 이번 달 할일이 간트 차트로 보인다.
+- 어제 미완료 할일 → 오늘 노트의 "이월된 할일" 자리로 이동
+- 이월된 항목: 며칠째 붙들고 있는지 숫자로 표시
+- 3~4일째: 🟠 / 🔴 경고 마커
+- 5영업일 초과: 그 달의 드롭 문서로 자동 이동
+- 완료 항목: 월간 종합 문서에 로그로 축적
+- 리본 달력 아이콘: 이번 달 간트 차트
 
 ## 실제 노트는 이렇게 생깁니다
 
@@ -143,7 +166,11 @@ MIT
 ## 💬 메모
 ```
 
-"API 응답 스키마 정리"가 3~4일째로 넘어가면 앞에 🟠, 🔴 마커가 붙고 "드롭 예정입니다" 경고가 나온다. 5영업일이 지나면 오늘 노트에서 사라지고 `2026-03 드롭.md`로 이동한다. 어제 완료한 "PR 리뷰"는 `2026-03 종합.md`에 기록되어 월말 회고에 쓸 수 있다.
+각 항목의 이후 처리:
+
+- 3~4일째: 앞에 🟠 / 🔴 마커 + "드롭 예정입니다" 경고
+- 5영업일 초과: 오늘 노트에서 사라짐 → `2026-03 드롭.md`로 이동
+- 완료된 "PR 리뷰": `2026-03 종합.md`에 기록 → 월말 회고 자료
 
 ## 자동 처리에 개입하고 싶을 때
 
@@ -155,9 +182,16 @@ MIT
 
 ## 타임라인 뷰
 
-리본의 달력 아이콘을 누르면 이번 달 할일이 간트 차트로 열린다. 진행 중은 파랑, 완료는 초록, 드롭은 회색. 막대를 클릭하면 해당 항목이 처음 등장한 데일리 노트로 이동한다. 주말은 세로선으로 구분되고 오늘 날짜에는 별도 표시가 붙는다.
+좌측 리본 → 달력 아이콘 → 이번 달 간트 차트.
 
-월간 종합 문서 안에도 Mermaid 간트 스냅샷이 매일 갱신되어 들어간다. 뷰를 열지 않아도 종합 문서 스크롤로 확인할 수 있고, 모바일에서도 렌더링된다.
+- 막대 색: 진행 중 파랑 / 완료 초록 / 드롭 회색
+- 막대 클릭 → 해당 항목이 처음 등장한 데일리 노트로 이동
+- 주말은 세로선, 오늘은 별도 마커
+
+월간 종합 문서에도 Mermaid 간트 스냅샷이 매일 자동 갱신된다.
+
+- 별도 뷰 없이 종합 문서 스크롤로 확인
+- 모바일에서도 렌더링
 
 > 스크린샷 자리 (`assets/timeline.png`)
 
@@ -176,11 +210,13 @@ Notes/
 보관함.md
 ```
 
-주차는 월요일 기준이고, 그 달의 1일이 포함된 주가 1주차다. 월이 바뀌면 새 폴더가 자동으로 만들어진다.
+- 주차는 월요일 기준. 그 달의 1일이 포함된 주가 1주차.
+- 월/년이 바뀌면 새 폴더가 자동 생성.
 
 ## 언제 실행되나
 
-옵시디언이 켜져 있는 동안 60초마다 오늘 노트가 있는지 확인한다. 며칠 동안 옵시디언을 안 열었다가 다시 열면, 마지막 실행일부터 오늘까지 놓친 영업일(기본 최대 14일)을 순서대로 처리한다.
+- 옵시디언 실행 중: 60초마다 오늘 노트 존재 여부 확인
+- 며칠 만에 다시 열었을 때: 마지막 실행일부터 오늘까지 놓친 영업일을 순서대로 처리 (기본 최대 14일)
 
 ## 설치
 
