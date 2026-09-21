@@ -10,6 +10,7 @@ export function resolveLocale(setting: LocaleSetting): Locale {
 }
 
 const M = {
+  // Timeline view
   toolbarToday: { ko: "오늘", en: "Today" },
   toolbarRefresh: { ko: "↻ 새로고침", en: "↻ Refresh" },
   legendActive: { ko: "진행중", en: "In progress" },
@@ -30,25 +31,174 @@ const M = {
     en: "Click to jump to the origin daily note",
   },
   sameDay: { ko: "당일", en: "Same day" },
+  viewDisplayLabel: { ko: "업무 타임라인", en: "Task Timeline" },
+
+  // Ribbon
+  ribbonOpenTimeline: { ko: "업무 타임라인 열기", en: "Open task timeline" },
+
+  // Commands
+  cmdCreateToday: { ko: "오늘 데일리 노트 생성", en: "Create today's daily note" },
+  cmdDryRun: {
+    ko: "Dry-run: 예상 동작만 출력",
+    en: "Dry-run: preview actions without writing",
+  },
+  cmdRecompute: { ko: "이번 달 종합 재계산", en: "Recompute this month's summary" },
+  cmdRefreshTimeline: {
+    ko: "이번 달 타임라인 새로고침 (종합 문서 내부)",
+    en: "Refresh this month's timeline (in summary)",
+  },
+  cmdForceDate: {
+    ko: "특정 날짜 노트 강제 재생성",
+    en: "Force regenerate a specific date",
+  },
+  cmdDoctor: { ko: "환경 진단", en: "Environment diagnostics" },
+  cmdOpenTimeline: { ko: "타임라인 뷰 열기", en: "Open timeline view" },
+
+  // Date prompt modal
+  datePromptTitle: {
+    ko: "노트를 강제 재생성할 날짜",
+    en: "Date to force regenerate",
+  },
+  datePromptSubmit: { ko: "실행", en: "Run" },
+
+  // Notice messages
+  noticeSkippedWeekend: { ko: "주말 스킵 ({date})", en: "Weekend, skipped ({date})" },
+  noticeAlreadyExists: { ko: "이미 존재 ({path})", en: "Already exists ({path})" },
+  noticeCreatedHead: {
+    ko: "데일리 노트 생성: {path}",
+    en: "Daily note created: {path}",
+  },
+  noticeCountsKo: {
+    ko: "이월 {c} · 완료 {d} · 드롭 {r} · 보관 {a}",
+    en: "carried {c} · done {d} · dropped {r} · archived {a}",
+  },
+  noticeCreateFailed: { ko: "생성 실패: {msg}", en: "Create failed: {msg}" },
+  noticeDryRunSummary: {
+    ko: "[dry-run] {date} — 이월 {c} · 완료 {d} · 드롭 {r} · 보관 {a}",
+    en: "[dry-run] {date} — carried {c} · done {d} · dropped {r} · archived {a}",
+  },
+  noticeDryRunFailed: { ko: "dry-run 실패: {msg}", en: "Dry-run failed: {msg}" },
+  noticeRecomputed: {
+    ko: "{ym} 종합 재계산 완료",
+    en: "{ym} summary recomputed",
+  },
+  noticeRecomputeFailed: {
+    ko: "재계산 실패: {msg}",
+    en: "Recompute failed: {msg}",
+  },
+  noticeTimelineRefreshed: {
+    ko: "{ym} 종합 문서의 타임라인 갱신 완료",
+    en: "Timeline refreshed in {ym} summary",
+  },
+  noticeTimelineFailed: {
+    ko: "타임라인 갱신 실패: {msg}",
+    en: "Timeline refresh failed: {msg}",
+  },
+  noticeForceFailed: {
+    ko: "강제 생성 실패: {msg}",
+    en: "Force regenerate failed: {msg}",
+  },
+  noticeDoctorOk: { ko: "정상 ({subdir})", en: "OK ({subdir})" },
+  noticeDoctorProblem: { ko: "문제: {issues}", en: "Problem: {issues}" },
+  noticeDoctorFailed: {
+    ko: "진단 실패: {msg}",
+    en: "Diagnostics failed: {msg}",
+  },
+  noticeDateFormat: {
+    ko: "형식이 YYYY-MM-DD 여야 합니다",
+    en: "Date must be in YYYY-MM-DD format",
+  },
+  noticeLanguageChanged: {
+    ko: "언어를 변경했습니다. 리본·명령어까지 완전 반영하려면 옵시디언을 다시 로드하세요.",
+    en: "Language changed. Reload Obsidian to fully update ribbon and commands.",
+  },
+
+  // Settings
+  setLangName: { ko: "언어", en: "Language" },
+  setLangDesc: {
+    ko: "플러그인 UI 언어. Auto 는 시스템에서 감지.",
+    en: "Plugin UI language. Auto detects from system locale.",
+  },
+  setLangAuto: { ko: "Auto (시스템)", en: "Auto (system)" },
+  setSubdirName: { ko: "노트 하위 폴더", en: "Notes subfolder" },
+  setSubdirDesc: {
+    ko: "볼트 안 데일리 노트 루트 폴더 (기본 Notes)",
+    en: "Root folder for daily notes in the vault (default: Notes)",
+  },
+  setDropThresholdName: { ko: "드롭 임계 (영업일)", en: "Drop threshold (business days)" },
+  setDropThresholdDesc: {
+    ko: "이월이 이 일수를 넘으면 월간 드롭 문서로 이동 (기본 5)",
+    en: "Tasks carrying over more than this many business days move to the monthly drop doc (default 5)",
+  },
+  setWarnThresholdName: { ko: "경고 임계 (일)", en: "Warning threshold (days)" },
+  setWarnThresholdDesc: {
+    ko: "이월이 이 일수 이상이면 🟠/🔴 경고 표시 (기본 3)",
+    en: "Show 🟠/🔴 warning when carryover reaches this many days (default 3)",
+  },
+  setArchiveFilenameName: { ko: "보관함 파일명", en: "Archive filename" },
+  setArchiveFilenameDesc: {
+    ko: "볼트 내 상시 보관함 파일 이름",
+    en: "Filename of the permanent archive file",
+  },
+  setSummarySuffixName: {
+    ko: "월간 종합 파일 접미어",
+    en: "Monthly summary filename suffix",
+  },
+  setSummarySuffixDesc: {
+    ko: '예: "종합" → "2026-09 종합.md"',
+    en: 'e.g. "Summary" → "2026-09 Summary.md"',
+  },
+  setDropSuffixName: { ko: "월간 드롭 파일 접미어", en: "Monthly drop filename suffix" },
+  setDropSuffixDesc: {
+    ko: '예: "드롭" → "2026-09 드롭.md"',
+    en: 'e.g. "Drop" → "2026-09 Drop.md"',
+  },
+  setSkipWeekendName: { ko: "주말 스킵", en: "Skip weekend" },
+  setSkipWeekendDesc: {
+    ko: "토·일에는 노트 생성하지 않음",
+    en: "Do not create notes on Sat/Sun",
+  },
+  setAutoLoadName: { ko: "실행 시 자동 catch-up", en: "Auto catch-up on load" },
+  setAutoLoadDesc: {
+    ko: "옵시디언 시작 시 마지막 실행 이후 놓친 날짜를 자동 처리",
+    en: "On Obsidian launch, auto-process missed business days since last run",
+  },
+  setMaxCatchupName: { ko: "Catch-up 최대 일수", en: "Max catch-up days" },
+  setMaxCatchupDesc: {
+    ko: "이 값보다 오래 옵시디언을 안 켰다가 켜면 그 이후 날짜만 처리 (기본 14)",
+    en: "If closed longer than this many days, only process today (default 14)",
+  },
 } as const;
 
-type MessageKey = keyof typeof M;
+export type MessageKey = keyof typeof M;
 
-export function t(key: MessageKey, locale: Locale): string {
-  return M[key][locale];
+export function t(
+  key: MessageKey,
+  locale: Locale,
+  params?: Record<string, string | number>,
+): string {
+  let s: string = M[key][locale];
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      s = s.split(`{${k}}`).join(String(v));
+    }
+  }
+  return s;
 }
 
-/** 요일 헤더 문자 (7자, 일~토 순) */
+/** dictionary 완전성 확인용. 모든 키가 두 로케일 다 정의됐는지. */
+export function allMessageKeys(): MessageKey[] {
+  return Object.keys(M) as MessageKey[];
+}
+
 export function daysOfWeekChars(locale: Locale): string {
   return locale === "ko" ? "일월화수목금토" : "SMTWTFS";
 }
 
-/** 요일 헤더 문자 (single). d = 0(일)..6(토) */
 export function dayOfWeekChar(d: number, locale: Locale): string {
   return daysOfWeekChars(locale)[d];
 }
 
-/** 소요일 텍스트 (막대 안에 표시). */
 export function durationLabel(
   days: number,
   status: "active" | "done" | "crit",
@@ -61,14 +211,7 @@ export function durationLabel(
   return locale === "ko" ? `${days}일` : `${days}d`;
 }
 
-/** 툴팁 메타 라인. iso 는 YYYY-MM-DD. */
-export function rangeLabel(
-  startIso: string,
-  endIso: string,
-  locale: Locale,
-): string {
-  if (startIso === endIso) {
-    return `${startIso} (${t("sameDay", locale)})`;
-  }
+export function rangeLabel(startIso: string, endIso: string, locale: Locale): string {
+  if (startIso === endIso) return `${startIso} (${t("sameDay", locale)})`;
   return `${startIso} ~ ${endIso}`;
 }

@@ -42,7 +42,18 @@ export interface RunResult {
 
 export interface CreateResult {
   created: boolean;
+  status: RunStatus;
   path: string;
+  today: Date;
+  /** 이월 항목 수 */
+  carriedOver: number;
+  /** 완료 이벤트 수 */
+  completed: number;
+  /** 드롭 이벤트 수 */
+  dropped: number;
+  /** 보관 이벤트 수 */
+  archived: number;
+  /** 로그·테스트용 한글 요약 문자열 (Notice 표시용 아님, UI 는 locale 별로 별도 포맷) */
   message: string;
 }
 
@@ -268,20 +279,43 @@ export class Engine {
 
   private toCreateResult(result: RunResult): CreateResult {
     const path = result.todayPath ?? "";
+    const e = result.events ?? emptyEvents();
+    const counts = {
+      carriedOver: e.carryingOver.length,
+      completed: e.completed.length,
+      dropped: e.dropped.length,
+      archived: e.archived.length,
+    };
     if (result.status === "skipped_weekend") {
-      return { created: false, path, message: `주말 스킵 (${toIsoDate(result.today)})` };
+      return {
+        created: false,
+        status: result.status,
+        path,
+        today: result.today,
+        ...counts,
+        message: `주말 스킵 (${toIsoDate(result.today)})`,
+      };
     }
     if (result.status === "skipped_exists") {
-      return { created: false, path, message: `이미 존재 (${path})` };
+      return {
+        created: false,
+        status: result.status,
+        path,
+        today: result.today,
+        ...counts,
+        message: `이미 존재 (${path})`,
+      };
     }
-    const e = result.events ?? emptyEvents();
     return {
       created: true,
+      status: result.status,
       path,
+      today: result.today,
+      ...counts,
       message:
         `데일리 노트 생성: ${path}\n` +
-        `  이월 ${e.carryingOver.length} · 완료 ${e.completed.length} · ` +
-        `드롭 ${e.dropped.length} · 보관 ${e.archived.length}`,
+        `  이월 ${counts.carriedOver} · 완료 ${counts.completed} · ` +
+        `드롭 ${counts.dropped} · 보관 ${counts.archived}`,
     };
   }
 

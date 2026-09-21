@@ -4,6 +4,7 @@ import { registerCommands } from "./commands";
 import { Scheduler } from "./scheduler";
 import { Engine } from "./engine";
 import { VaultAdapter } from "./engine/vault";
+import { resolveLocale, t } from "./i18n";
 import { TIMELINE_VIEW_TYPE, TimelineView } from "./view/timelineView";
 
 export default class DailyNoteManagerPlugin extends Plugin {
@@ -13,6 +14,8 @@ export default class DailyNoteManagerPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    const locale = resolveLocale(this.settings.language);
 
     this.engine = new Engine(
       new VaultAdapter(this.app),
@@ -25,13 +28,13 @@ export default class DailyNoteManagerPlugin extends Plugin {
 
     this.registerView(TIMELINE_VIEW_TYPE, (leaf) => new TimelineView(leaf, this));
 
-    this.addRibbonIcon("calendar-clock", "업무 타임라인 열기", () => {
+    this.addRibbonIcon("calendar-clock", t("ribbonOpenTimeline", locale), () => {
       this.activateTimelineView();
     });
 
     this.addCommand({
       id: "open-timeline-view",
-      name: "타임라인 뷰 열기",
+      name: t("cmdOpenTimeline", locale),
       callback: () => this.activateTimelineView(),
     });
 
@@ -46,7 +49,7 @@ export default class DailyNoteManagerPlugin extends Plugin {
   }
 
   onunload() {
-    // Scheduler 의 interval 은 plugin.registerInterval 로 자동 정리됨
+    // Scheduler interval 은 plugin.registerInterval 로 자동 정리됨
   }
 
   async loadSettings() {

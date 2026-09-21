@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type DailyNoteManagerPlugin from "./main";
-import type { LocaleSetting } from "./i18n";
+import { resolveLocale, t, type LocaleSetting } from "./i18n";
 
 export interface DailyNoteSettings {
   notesSubdir: string;
@@ -45,10 +45,11 @@ export class DailyNoteSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    const lc = resolveLocale(this.plugin.settings.language);
 
     new Setting(containerEl)
-      .setName("노트 하위 폴더")
-      .setDesc("볼트 안 데일리 노트 루트 폴더 (기본 Notes)")
+      .setName(t("setSubdirName", lc))
+      .setDesc(t("setSubdirDesc", lc))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.notesSubdir)
@@ -59,8 +60,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("드롭 임계 (영업일)")
-      .setDesc("이월이 이 일수를 넘으면 월간 드롭 문서로 이동 (기본 5)")
+      .setName(t("setDropThresholdName", lc))
+      .setDesc(t("setDropThresholdDesc", lc))
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.dropThresholdDays))
@@ -74,8 +75,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("경고 임계 (일)")
-      .setDesc("이월이 이 일수 이상이면 🟠/🔴 경고 표시 (기본 3)")
+      .setName(t("setWarnThresholdName", lc))
+      .setDesc(t("setWarnThresholdDesc", lc))
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.warnThresholdDays))
@@ -89,8 +90,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("보관함 파일명")
-      .setDesc("볼트 내 상시 보관함 파일 이름")
+      .setName(t("setArchiveFilenameName", lc))
+      .setDesc(t("setArchiveFilenameDesc", lc))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.archiveFileName)
@@ -101,8 +102,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("월간 종합 파일 접미어")
-      .setDesc('예: "종합" → "2026-09 종합.md"')
+      .setName(t("setSummarySuffixName", lc))
+      .setDesc(t("setSummarySuffixDesc", lc))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.monthlySummarySuffix)
@@ -113,8 +114,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("월간 드롭 파일 접미어")
-      .setDesc('예: "드롭" → "2026-09 드롭.md"')
+      .setName(t("setDropSuffixName", lc))
+      .setDesc(t("setDropSuffixDesc", lc))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.monthlyDropSuffix)
@@ -125,32 +126,28 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("주말 스킵")
-      .setDesc("토·일에는 노트 생성하지 않음")
+      .setName(t("setSkipWeekendName", lc))
+      .setDesc(t("setSkipWeekendDesc", lc))
       .addToggle((tg) =>
-        tg
-          .setValue(this.plugin.settings.skipWeekend)
-          .onChange(async (v) => {
-            this.plugin.settings.skipWeekend = v;
-            await this.plugin.saveSettings();
-          }),
+        tg.setValue(this.plugin.settings.skipWeekend).onChange(async (v) => {
+          this.plugin.settings.skipWeekend = v;
+          await this.plugin.saveSettings();
+        }),
       );
 
     new Setting(containerEl)
-      .setName("실행 시 자동 catch-up")
-      .setDesc("옵시디언 시작 시 마지막 실행 이후 놓친 날짜를 자동 처리")
+      .setName(t("setAutoLoadName", lc))
+      .setDesc(t("setAutoLoadDesc", lc))
       .addToggle((tg) =>
-        tg
-          .setValue(this.plugin.settings.autoRunOnLoad)
-          .onChange(async (v) => {
-            this.plugin.settings.autoRunOnLoad = v;
-            await this.plugin.saveSettings();
-          }),
+        tg.setValue(this.plugin.settings.autoRunOnLoad).onChange(async (v) => {
+          this.plugin.settings.autoRunOnLoad = v;
+          await this.plugin.saveSettings();
+        }),
       );
 
     new Setting(containerEl)
-      .setName("Catch-up 최대 일수")
-      .setDesc("이 값보다 오래 옵시디언을 안 켰다가 켜면 그 이후 날짜만 처리 (기본 14)")
+      .setName(t("setMaxCatchupName", lc))
+      .setDesc(t("setMaxCatchupDesc", lc))
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.maxCatchUpDays))
@@ -164,17 +161,23 @@ export class DailyNoteSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Language / 언어")
-      .setDesc("Timeline view UI language. Auto detects from system locale.")
+      .setName(t("setLangName", lc))
+      .setDesc(t("setLangDesc", lc))
       .addDropdown((drop) =>
         drop
-          .addOption("auto", "Auto (system)")
+          .addOption("auto", t("setLangAuto", lc))
           .addOption("en", "English")
           .addOption("ko", "한국어")
           .setValue(this.plugin.settings.language)
           .onChange(async (value) => {
+            const previous = this.plugin.settings.language;
             this.plugin.settings.language = value as DailyNoteSettings["language"];
             await this.plugin.saveSettings();
+            // 설정 탭 자체를 다시 그려서 라벨 언어 갱신
+            this.display();
+            if (previous !== value) {
+              new Notice(t("noticeLanguageChanged", resolveLocale(this.plugin.settings.language)));
+            }
           }),
       );
   }
