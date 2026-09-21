@@ -30,6 +30,14 @@ const M = {
     ko: "클릭하면 시작일 데일리 노트로 이동",
     en: "Click to jump to the origin daily note",
   },
+  warnTooltipCountdownMulti: {
+    ko: "⚠️ 드롭까지 {n}영업일 남음 — 완료하지 않으면 월간 드롭 문서로 자동 이동됩니다",
+    en: "⚠️ {n} business days until auto-drop — moves to monthly drop doc if not completed",
+  },
+  warnTooltipCountdownOne: {
+    ko: "⚠️ 다음 영업일에 드롭 예정 — 오늘 처리하지 않으면 월간 드롭 문서로 이동됩니다",
+    en: "⚠️ Will drop on the next business day — move it forward before end of day",
+  },
   sameDay: { ko: "당일", en: "Same day" },
   viewDisplayLabel: { ko: "업무 타임라인", en: "Task Timeline" },
 

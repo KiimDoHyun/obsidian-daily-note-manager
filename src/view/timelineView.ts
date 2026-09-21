@@ -541,6 +541,17 @@ export class TimelineView extends ItemView {
       `${sectionMark} ${this.sectionLabel(item.section)} · ${this.durationText(item)} · ${rangeLabel(toIsoDate(item.start), toIsoDate(item.end), this.locale)}`,
     );
 
+    // 드롭 경고 카운트다운
+    if (warnEmoji) {
+      const daysUntilDrop = this.plugin.settings.dropThresholdDays
+        - businessDaysInSpan(item.start, item.end);
+      if (daysUntilDrop > 0) {
+        const warn = el.createDiv({ cls: "dnm-tt-warn" });
+        const key = daysUntilDrop === 1 ? "warnTooltipCountdownOne" : "warnTooltipCountdownMulti";
+        warn.setText(t(key, this.locale, { n: daysUntilDrop }));
+      }
+    }
+
     if (item.children.length > 0) {
       const pre = el.createEl("pre", { cls: "dnm-tt-children" });
       pre.setText(item.children.map((l) => l.replace(/\t/g, "    ")).join("\n"));
