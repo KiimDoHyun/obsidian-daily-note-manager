@@ -23,6 +23,7 @@ import {
   recomputeHeader,
   type SummaryEventType,
 } from "./writers/monthlySummary";
+import { generateTimeline } from "./writers/timeline";
 
 export type RunStatus =
   | "created"
@@ -101,6 +102,11 @@ export class Engine {
     const monthDate = new Date(y, m - 1, 1);
     const path = await ensureSummary(monthDate, this.vault, this.settings);
     await recomputeHeader(path, this.vault);
+  }
+
+  async generateTimelineForMonth(yearMonth: string): Promise<string> {
+    const [y, m] = yearMonth.split("-").map((n) => parseInt(n, 10));
+    return generateTimeline(new Date(y, m - 1, 1), this.vault, this.settings);
   }
 
   async doctor(): Promise<DoctorReport> {

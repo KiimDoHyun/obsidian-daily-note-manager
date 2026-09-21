@@ -49,6 +49,22 @@ export function registerCommands(plugin: DailyNoteManagerPlugin) {
   });
 
   plugin.addCommand({
+    id: "generate-timeline",
+    name: "이번 달 타임라인 생성 (Mermaid Gantt)",
+    callback: async () => {
+      const now = new Date();
+      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      try {
+        const path = await plugin.engine.generateTimelineForMonth(ym);
+        new Notice(`타임라인 생성: ${path}`);
+      } catch (err) {
+        console.error("[daily-note] timeline failed", err);
+        new Notice(`타임라인 생성 실패: ${(err as Error).message}`);
+      }
+    },
+  });
+
+  plugin.addCommand({
     id: "force-date",
     name: "특정 날짜 노트 강제 재생성",
     callback: async () => {
