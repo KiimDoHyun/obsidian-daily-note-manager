@@ -541,14 +541,22 @@ export class TimelineView extends ItemView {
       `${sectionMark} ${this.sectionLabel(item.section)} · ${this.durationText(item)} · ${rangeLabel(toIsoDate(item.start), toIsoDate(item.end), this.locale)}`,
     );
 
-    // 드롭 경고 카운트다운
+    // 드롭 경고 카운트다운. highlight 부분만 별도 span 으로 감싸 강조.
     if (warnEmoji) {
       const daysUntilDrop = this.plugin.settings.dropThresholdDays
         - businessDaysInSpan(item.start, item.end);
       if (daysUntilDrop > 0) {
+        const templateKey =
+          daysUntilDrop === 1 ? "warnTooltipCountdownOne" : "warnTooltipCountdownMulti";
+        const highlight = daysUntilDrop === 1
+          ? t("warnHighlightNextDay", this.locale)
+          : t("warnHighlightDaysMulti", this.locale, { n: daysUntilDrop });
+        const template = t(templateKey, this.locale);
+        const [before, after] = template.split("{highlight}");
         const warn = el.createDiv({ cls: "dnm-tt-warn" });
-        const key = daysUntilDrop === 1 ? "warnTooltipCountdownOne" : "warnTooltipCountdownMulti";
-        warn.setText(t(key, this.locale, { n: daysUntilDrop }));
+        warn.createSpan({ text: before });
+        warn.createSpan({ text: highlight, cls: "dnm-tt-warn-highlight" });
+        warn.createSpan({ text: after ?? "" });
       }
     }
 
