@@ -471,15 +471,15 @@ export class TimelineView extends ItemView {
   }
 
   /**
-   * 진행중 항목 앞에 붙일 상태 이모지.
-   * - #장기 마커: ♾️ (드롭 면제)
+   * 진행중 항목 앞에 붙일 상태 라벨.
+   * - #장기 마커: [장기] / [Long] (드롭 면제)
    * - 드롭 하루 전: 🔴
    * - 드롭 이틀 전: 🟠
    * 완료·드롭 항목은 색으로 이미 구분되므로 빈 문자열.
    */
   private warningEmoji(item: TimelineItem): string {
     if (item.status !== "active") return "";
-    if (item.hasLongMarker) return "♾️";
+    if (item.hasLongMarker) return t("longTermLabel", this.locale);
     const n = businessDaysInSpan(item.start, item.end);
     const drop = this.plugin.settings.dropThresholdDays;
     const warnOrange = Math.max(1, drop - this.plugin.settings.warnOrangeDaysBeforeDrop);
