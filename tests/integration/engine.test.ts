@@ -350,3 +350,141 @@ describe("Engine 상단 요약 재계산", () => {
     });
   });
 });
+
+// MUST 4 — lastRunDate 갱신 규칙
+// 정책: 성공 생성일 때만 lastRunDate 를 갱신. 주말/기존파일 스킵 경로에서는 갱신하지 않음.
+// 이 규칙이 무너지면 catchUp 이 잘못된 마지막-실행일 기준으로 동작해 놓친 날짜가 생길 수 있음.
+describe("Engine.createForToday — lastRunDate 갱신 규칙", () => {
+  it("성공 생성 → lastRunDate 를 today 로 갱신", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault, { lastRunDate: null });
+      const res = await engine.createForToday();
+      expect(res.created).toBe(true);
+      expect(settings.lastRunDate).toBe("2026-09-15");
+    });
+  });
+
+  it("skipped_weekend → lastRunDate 유지 (갱신 안 함)", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-19", async () => {
+      // 토요일 + skipWeekend 기본값
+      const { engine, settings } = makeEngine(vault, { lastRunDate: "2026-09-17" });
+      const res = await engine.createForToday();
+      expect(res.created).toBe(false);
+      expect(res.message).toContain("주말");
+      expect(settings.lastRunDate).toBe("2026-09-17"); // 그대로
+    });
+  });
+
+  it("skipped_exists → lastRunDate 유지 (갱신 안 함)", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault, { lastRunDate: "2026-09-10" });
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-15"), settings),
+        "already exists — 다른 도구가 만들어둠",
+      );
+      const res = await engine.createForToday();
+      expect(res.created).toBe(false);
+      expect(res.message).toContain("이미 존재");
+      expect(settings.lastRunDate).toBe("2026-09-10"); // 그대로
+    });
+  });
+});
+
+// MUST 5 — 이전 노트 탐색 폴백 (findPreviousNote)
+// 정책: 어제(previousBusinessDay) 가 없으면 today-1..today-maxCatchUpDays 를 거슬러 탐색.
+// 폴백 결과 origin 날짜가 이월 태그의 "MM-DD~" 로 남으므로, 여기가 뚫리면 이월 계산이 어긋남.
+describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
+  it("어제(금)가 없으면 그저께(목) 노트를 찾아 origin 으로 사용", async () => {
+    // today = 2026-09-21 (Mon). 지난 금(18) 없음, 목(17) 있음.
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-21", async () => {
+      const { engine, settings } = makeEngine(vault);
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-17"), settings),
+        makeDailyNoteMd({ date: "2026-09-17", activeLines: ["- [ ] Thu task"] }),
+      );
+      await engine.createForToday();
+      const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
+      // origin 은 09-17 로 잡히고 새 이월로 1일째로 표시.
+      expect(today).toContain("- [ ] Thu task (1일째 이월, 09-17~)");
+    });
+  });
+
+  it("maxCatchUpDays 범위를 넘는 오래된 노트는 무시 → 이월 없이 새 노트 생성", async () => {
+    // today = 2026-09-21 (Mon). maxCatchUpDays=3.
+    // 후보: 09-20(Sun 스킵), 09-19(Sat 스킵), 09-18(Fri) → 미존재. 그 이상은 안 봄.
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-21", async () => {
+      const { engine, settings } = makeEngine(vault, { maxCatchUpDays: 3 });
+      // 7일 전 노트만 시드.
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-14"), settings),
+        makeDailyNoteMd({ date: "2026-09-14", activeLines: ["- [ ] very old task"] }),
+      );
+      await engine.createForToday();
+      const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
+      // origin 을 못 찾아 이월 없이 빈 이월 섹션.
+      expect(today).not.toContain("very old task");
+      expect(today).toContain("## ✅ 이월된 할일\n\n## 💬 메모");
+    });
+  });
+
+  it("주말은 폴백 탐색에서 건너뜀 (skipWeekend=true)", async () => {
+    // today = 2026-09-22 (Tue). 어제(월 21) 없음. 폴백:
+    //   i=1: 09-21 Mon 존재 안 → 통과 (isWeekend 아님)
+    //   i=2: 09-20 Sun → skipWeekend true 로 continue
+    //   i=3: 09-19 Sat → continue
+    //   i=4: 09-18 Fri → 존재하면 채택.
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-22", async () => {
+      const { engine, settings } = makeEngine(vault);
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-18"), settings),
+        makeDailyNoteMd({ date: "2026-09-18", activeLines: ["- [ ] Fri task"] }),
+      );
+      await engine.createForToday();
+      const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-22"), settings))!;
+      expect(today).toContain("- [ ] Fri task (1일째 이월, 09-18~)");
+    });
+  });
+});
+
+// SHOULD 10 — Doctor 진단
+// 사용자가 수동으로 "환경 점검" 을 돌릴 때 나오는 경로. 세팅 문제를 사용자가 알아채도록.
+describe("Engine.doctor — 환경 진단", () => {
+  it("notesSubdir 미설정 (빈 문자열) → issue 반환", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine } = makeEngine(vault, { notesSubdir: "" });
+      const diag = await engine.doctor();
+      expect(diag.ok).toBe(false);
+      expect(diag.issues.some((x) => x.includes("notesSubdir"))).toBe(true);
+    });
+  });
+
+  it("notesSubdir 지정됐지만 해당 폴더가 볼트에 없음 → issue 반환", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine } = makeEngine(vault, { notesSubdir: "MyNotes" });
+      const diag = await engine.doctor();
+      expect(diag.ok).toBe(false);
+      expect(diag.issues.some((x) => x.includes("MyNotes"))).toBe(true);
+    });
+  });
+
+  it("notesSubdir 존재 → ok=true, 이슈 목록 비어있음", async () => {
+    const vault = new InMemoryVault();
+    await vault.ensureFolder("Notes");
+    await withFixedToday("2026-09-15", async () => {
+      const { engine } = makeEngine(vault);
+      const diag = await engine.doctor();
+      expect(diag.ok).toBe(true);
+      expect(diag.issues).toEqual([]);
+      expect(diag.notesSubdir).toBe("Notes");
+      expect(diag.todayPath).toContain("2026-09-15");
+    });
+  });
+});
