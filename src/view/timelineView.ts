@@ -199,34 +199,47 @@ export class TimelineView extends ItemView {
 
       const range = this.clipRangeToMonth(item, first, daysInMonth);
       if (range !== null) {
-        const { startDay, endDay } = range;
-        const x = (startDay - 1) * DAY_WIDTH + 2;
-        const w = Math.max((endDay - startDay + 1) * DAY_WIDTH - 4, 4);
+        const segments = this.computeBusinessDaySegments(
+          range.startDay,
+          range.endDay,
+          first,
+        );
         const barY = y + (ROW_HEIGHT - BAR_HEIGHT) / 2;
-        const bar = svgEl("rect");
-        bar.classList.add("dnm-bar");
-        bar.setAttribute("x", String(x));
-        bar.setAttribute("y", String(barY));
-        bar.setAttribute("width", String(w));
-        bar.setAttribute("height", String(BAR_HEIGHT));
-        bar.setAttribute("rx", "3");
-        bar.setAttribute("fill", this.colorFor(item.status));
-        bar.addEventListener("click", () => this.openDailyNoteFor(item));
-        bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
-        bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
-        bar.addEventListener("mouseleave", () => this.hideTooltip());
-        rowGroup.appendChild(bar);
+        let widest = { x: 0, w: 0 };
 
-        const duration = this.durationDisplay(item, w);
-        if (duration) {
-          const dur = svgEl("text");
-          dur.classList.add("dnm-duration");
-          dur.setAttribute("x", String(x + w / 2));
-          dur.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
-          dur.setAttribute("text-anchor", "middle");
-          dur.setAttribute("font-size", "11");
-          dur.textContent = duration;
-          rowGroup.appendChild(dur);
+        for (const seg of segments) {
+          const x = (seg.startDay - 1) * DAY_WIDTH + 2;
+          const w = Math.max((seg.endDay - seg.startDay + 1) * DAY_WIDTH - 4, 4);
+          const bar = svgEl("rect");
+          bar.classList.add("dnm-bar");
+          bar.setAttribute("x", String(x));
+          bar.setAttribute("y", String(barY));
+          bar.setAttribute("width", String(w));
+          bar.setAttribute("height", String(BAR_HEIGHT));
+          bar.setAttribute("rx", "3");
+          bar.setAttribute("fill", this.colorFor(item.status));
+          bar.addEventListener("click", () => this.openDailyNoteFor(item));
+          bar.addEventListener("mouseenter", (e) => this.showTooltip(item, e as MouseEvent));
+          bar.addEventListener("mousemove", (e) => this.positionTooltip(e as MouseEvent));
+          bar.addEventListener("mouseleave", () => this.hideTooltip());
+          rowGroup.appendChild(bar);
+          if (w > widest.w) widest = { x, w };
+        }
+
+        // 라벨은 가장 넓은 세그먼트에 배치. 여러 세그먼트로 나뉜 경우에도
+        // 전체 영업일 수를 표시 (라벨과 시각 폭이 일치하는 단일 세그먼트에서 가장 자연스러움).
+        if (widest.w > 0) {
+          const duration = this.durationDisplay(item, widest.w);
+          if (duration) {
+            const dur = svgEl("text");
+            dur.classList.add("dnm-duration");
+            dur.setAttribute("x", String(widest.x + widest.w / 2));
+            dur.setAttribute("y", String(barY + BAR_HEIGHT / 2 + 4));
+            dur.setAttribute("text-anchor", "middle");
+            dur.setAttribute("font-size", "11");
+            dur.textContent = duration;
+            rowGroup.appendChild(dur);
+          }
         }
       }
 
@@ -389,6 +402,32 @@ export class TimelineView extends ItemView {
     label.setAttribute("font-size", "10");
     label.textContent = t("todayLabel", this.locale);
     svg.appendChild(label);
+  }
+
+  /**
+   * 이번 달 구간 안에서 영업일 연속 세그먼트로 분할.
+   * 주말 컬럼은 막대에서 제외 → "3영업일 = 3칸" 의 시각적 일관성 확보.
+   */
+  private computeBusinessDaySegments(
+    startDay: number,
+    endDay: number,
+    first: Date,
+  ): Array<{ startDay: number; endDay: number }> {
+    const segments: Array<{ startDay: number; endDay: number }> = [];
+    let curStart: number | null = null;
+    for (let d = startDay; d <= endDay; d++) {
+      const day = new Date(first.getFullYear(), first.getMonth(), d);
+      if (isWeekend(day)) {
+        if (curStart !== null) {
+          segments.push({ startDay: curStart, endDay: d - 1 });
+          curStart = null;
+        }
+      } else if (curStart === null) {
+        curStart = d;
+      }
+    }
+    if (curStart !== null) segments.push({ startDay: curStart, endDay });
+    return segments;
   }
 
   private clipRangeToMonth(
