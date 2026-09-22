@@ -39,7 +39,9 @@ function splitSections(lines: string[]): Map<string, string[]> {
   for (const line of lines) {
     const stripped = line.replace(/\s+$/, "");
     if (stripped.startsWith("## ")) {
-      current = stripped;
+      // 이월 섹션은 헤더 끝에 ` (N)` 카운트가 붙는다. 매칭 키에서는 카운트를 떼서
+      // 카운트 유무와 무관하게 pickSection 이 인식하도록 한다.
+      current = stripped.replace(/\s*\(\d+\)$/, "");
       if (!sections.has(current)) sections.set(current, []);
     } else if (current !== null) {
       sections.get(current)!.push(line);

@@ -11,6 +11,33 @@ describe("parser: section 분리", () => {
     expect(p.carryoverBlocks).toHaveLength(0);
   });
 
+  it("이월 섹션 헤더에 (N) 카운트가 붙어있어도 인식", () => {
+    // 라이터가 헤더에 카운트를 붙이므로, 다음날 파서는 카운트 유무와 무관하게 매칭해야 한다.
+    const md = [
+      "---",
+      "date: 2026-09-15",
+      "tags: [daily]",
+      "---",
+      "",
+      "## 📌 할일",
+      "- [ ] new",
+      "",
+      "## ✅ 이월된 할일 (2)",
+      "- [ ] A (**1일째** 이월, 09-14~)",
+      "",
+      "---",
+      "",
+      "- [ ] B (**1일째** 이월, 09-14~)",
+      "",
+      "## 💬 메모",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(2);
+    expect(p.carryoverBlocks[0].topText).toBe("A");
+    expect(p.carryoverBlocks[1].topText).toBe("B");
+  });
+
   it("옛 섹션명(오늘의 목표/미완료 이월)도 하위호환 인식", () => {
     const md = makeLegacyDailyNoteMd({
       date: "2026-09-15",

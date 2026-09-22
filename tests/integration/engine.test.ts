@@ -64,7 +64,7 @@ describe("Engine.createForToday — 시나리오", () => {
 
       const todayPath = dailyNotePath(fromIsoDate("2026-09-15"), settings);
       const md = vault.peek(todayPath)!;
-      expect(md).toContain("## ✅ 이월된 할일\n\n## 💬 메모");
+      expect(md).toContain("## ✅ 이월된 할일 (0)\n\n## 💬 메모");
     });
   });
 
@@ -390,6 +390,72 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
   });
 });
 
+// 이월 섹션 헤더에 카운트를 붙여 사용자가 오늘 몇 개의 항목이 이월됐는지
+// 헤더만 봐도 파악할 수 있게 한다. 파서는 카운트 유무와 무관하게 헤더를
+// 인식하므로 옛 노트도 문제 없이 파싱된다.
+describe("Engine.createForToday — 이월 섹션 헤더 카운트", () => {
+  it("이월 3개면 헤더가 `## ✅ 이월된 할일 (3)`", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-14"), settings),
+        makeDailyNoteMd({
+          date: "2026-09-14",
+          activeLines: ["- [ ] A", "- [ ] B", "- [ ] C"],
+        }),
+      );
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      expect(md).toMatch(/^## ✅ 이월된 할일 \(3\)$/m);
+    });
+  });
+
+  it("이월 0개여도 헤더는 `(0)` 로 항상 표시", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine } = makeEngine(vault);
+      const res = await engine.createForToday();
+      expect(res.created).toBe(true);
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), makeSettings()))!;
+      expect(md).toMatch(/^## ✅ 이월된 할일 \(0\)$/m);
+    });
+  });
+
+  it("어제 카운트가 붙은 헤더도 파서가 인식하여 재렌더링 시 카운트가 올바르게 갱신", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      // 어제 카운트가 (2) 인 상태로 시드. 그중 하나는 완료 표시된 채 남아있음.
+      // 파서는 카운트를 무시하고 섹션을 찾아야 하고, 오늘 이월은 남은 1개(A) 만.
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일 (2)",
+        "- [ ] A (**1일째** 이월, 09-13~)",
+        "",
+        "---",
+        "",
+        "- [x] B (**1일째** 이월, 09-13~)",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      expect(md).toMatch(/^## ✅ 이월된 할일 \(1\)$/m);
+      expect(md).toContain("- [ ] A (**2일째** 이월, 09-13~)");
+      expect(md).not.toContain("- [ ] B");
+    });
+  });
+});
+
 describe("Engine.forceDate", () => {
   it("기존 노트 지우고 재생성", async () => {
     const vault = new InMemoryVault();
@@ -502,7 +568,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
       // origin 을 못 찾아 이월 없이 빈 이월 섹션.
       expect(today).not.toContain("very old task");
-      expect(today).toContain("## ✅ 이월된 할일\n\n## 💬 메모");
+      expect(today).toContain("## ✅ 이월된 할일 (0)\n\n## 💬 메모");
     });
   });
 

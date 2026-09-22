@@ -46,7 +46,7 @@ export function renderDailyNote(
     "- [ ] ",
     "- [ ] ",
     "",
-    SECTION_CARRYOVER_NEW,
+    `${SECTION_CARRYOVER_NEW} (${sorted.length})`,
   ];
   if (carryBody) parts.push(carryBody);
   parts.push("", SECTION_MEMO, "", "", footer, "");
