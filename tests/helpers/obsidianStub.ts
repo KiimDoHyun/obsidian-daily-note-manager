@@ -12,12 +12,17 @@ export function normalizePath(p: string): string {
 }
 
 export class App {}
-export class Plugin {}
+export class Plugin {
+  async saveData(_data: unknown): Promise<void> {}
+  async loadData(): Promise<unknown> {
+    return null;
+  }
+}
 export class ItemView {}
 export class WorkspaceLeaf {}
 export class Modal {}
 export class Notice {
-  constructor(_message: string) {}
+  constructor(_message: string, _timeout?: number) {}
 }
 
 export class PluginSettingTab {

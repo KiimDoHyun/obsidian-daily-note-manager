@@ -38,6 +38,8 @@ What happens next to each task:
 - Day 5+: task disappears from today's note → moves to `2026-03 드롭.md`
 - The completed "PR review": logged in `2026-03 종합.md` for month-end review
 
+Drop and completion logs are written to the month of the **event date** (when the drop or completion actually happened), not the month the task first appeared. A task started on 2026-02-26 and dropped on 2026-03-04 lands in `2026-03 드롭.md`.
+
 ## Overriding the policy
 
 Three markers on a task line change how it's handled:
@@ -187,6 +189,8 @@ MIT
 - 3~4일째: 앞에 🟠 / 🔴 마커 + "드롭 예정입니다" 경고
 - 5영업일 초과: 오늘 노트에서 사라짐 → `2026-03 드롭.md`로 이동
 - 완료된 "PR 리뷰": `2026-03 종합.md`에 기록 → 월말 회고 자료
+
+드롭·완료 로그는 **이벤트가 발생한 날(종료일) 기준**으로 해당 월 문서에 남는다. 항목이 처음 만들어진 달이 아니다. 2026-02-26 에 시작해 2026-03-04 에 드롭된 항목은 `2026-03 드롭.md` 로 간다.
 
 ## 자동 처리에 개입하고 싶을 때
 

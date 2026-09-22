@@ -88,6 +88,8 @@ export class DailyNoteSettingTab extends PluginSettingTab {
 
   /**
    * 1.12 이하 fallback UI. 1.13+ 에서는 getSettingDefinitions() 가 우선 적용되어 이 메서드는 호출되지 않는다.
+   * 임계값 조합 유효성은 plugin.saveData 에서 한 번만 검사한다 (선언형/fallback 양쪽 공통 chokepoint).
+   * 여기서는 값 대입 후 saveSettings 만 호출하면 되고, 정정이 발생하면 saveData 가 Notice + 재렌더까지 책임진다.
    */
   display(): void {
     const { containerEl } = this;

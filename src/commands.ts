@@ -90,6 +90,23 @@ export function registerCommands(plugin: DailyNoteManagerPlugin) {
   });
 
   plugin.addCommand({
+    id: "drain-pending-queue",
+    name: t("cmdDrainPendingQueue", locale),
+    callback: async () => {
+      const lc = resolveLocale(plugin.settings.language);
+      try {
+        const res = await plugin.engine.drainPendingQueue();
+        new Notice(
+          t("noticeDrainResult", lc, { drained: res.drained, remaining: res.remaining }),
+        );
+      } catch (err) {
+        console.error("[daily-note] drain-pending-queue failed", err);
+        new Notice(t("noticeDrainFailed", lc, { msg: (err as Error).message }));
+      }
+    },
+  });
+
+  plugin.addCommand({
     id: "doctor",
     name: t("cmdDoctor", locale),
     callback: async () => {

@@ -68,6 +68,10 @@ const M = {
   },
   cmdDoctor: { ko: "환경 진단", en: "Environment diagnostics" },
   cmdOpenTimeline: { ko: "타임라인 뷰 열기", en: "Open timeline view" },
+  cmdDrainPendingQueue: {
+    ko: "대기열 지금 처리",
+    en: "Process pending queue now",
+  },
 
   // Date prompt modal
   datePromptTitle: {
@@ -118,6 +122,14 @@ const M = {
   noticeDoctorFailed: {
     ko: "진단 실패: {msg}",
     en: "Diagnostics failed: {msg}",
+  },
+  noticeDrainResult: {
+    ko: "대기열 처리: {drained}건 완료, {remaining}건 남음",
+    en: "Pending queue: {drained} processed, {remaining} remaining",
+  },
+  noticeDrainFailed: {
+    ko: "대기열 처리 실패: {msg}",
+    en: "Pending queue processing failed: {msg}",
   },
   noticeDateFormat: {
     ko: "형식이 YYYY-MM-DD 여야 합니다",
