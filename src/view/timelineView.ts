@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, TAbstractFile, WorkspaceLeaf } from "obsidian";
 import type DailyNoteManagerPlugin from "../main";
 import {
   addDays,
@@ -41,6 +41,10 @@ export class TimelineView extends ItemView {
   private currentMonth: Date;
   private tooltipEl: HTMLDivElement | null = null;
   private locale: Locale = "en";
+  // 파일 변경 이벤트가 짧은 시간에 여러 번 터지는 경우(옵시디언 자동 저장·rename 등) 를
+  // 방지하기 위한 debounce 타이머. 이 창 안에 들어온 이벤트는 한 번의 rerender 로 병합.
+  private refreshTimer: number | null = null;
+  private readonly REFRESH_DEBOUNCE_MS = 400;
 
   constructor(leaf: WorkspaceLeaf, private plugin: DailyNoteManagerPlugin) {
     super(leaf);
@@ -60,15 +64,36 @@ export class TimelineView extends ItemView {
 
   async onOpen(): Promise<void> {
     await this.rerender();
+    // 데일리 노트 폴더 안 파일이 바뀌면(사용자 편집·자동 생성 등) 타임라인을 자동 갱신.
+    // registerEvent 는 뷰가 닫힐 때 자동 unregister 되므로 leak 걱정 없음.
+    this.registerEvent(this.app.vault.on("modify", (f) => this.onDailyNoteChange(f)));
+    this.registerEvent(this.app.vault.on("create", (f) => this.onDailyNoteChange(f)));
+    this.registerEvent(this.app.vault.on("delete", (f) => this.onDailyNoteChange(f)));
+    this.registerEvent(this.app.vault.on("rename", (f) => this.onDailyNoteChange(f)));
   }
 
   async onClose(): Promise<void> {
+    if (this.refreshTimer !== null) {
+      window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     this.contentEl.empty();
   }
 
   /** 외부(플러그인 설정 저장, 리본 재클릭 등)에서 강제 재렌더링. */
   async forceRerender(): Promise<void> {
     await this.rerender();
+  }
+
+  private onDailyNoteChange(file: TAbstractFile): void {
+    // 데일리 노트 관련 폴더 안 파일만 관심. 다른 vault 파일 편집엔 반응 안 함.
+    const notesRoot = this.plugin.settings.notesSubdir;
+    if (!notesRoot || !file.path.startsWith(notesRoot + "/")) return;
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      void this.rerender();
+    }, this.REFRESH_DEBOUNCE_MS);
   }
 
   private async rerender(): Promise<void> {

@@ -56,34 +56,44 @@ export async function collectTimelineItems(
 ): Promise<TimelineItem[]> {
   const items: TimelineItem[] = [];
 
+  // 월간 종합 문서: 이 달의 완료·드롭 이벤트 (누적 로그)
   const summaryP = monthlySummaryPath(month, settings);
   if (vault.exists(summaryP)) {
-    const raw = await vault.read(summaryP);
-    const summaryItems = extractFromSummary(raw, month.getFullYear());
-    for (const item of summaryItems) {
-      await attachChildrenFromEventNote(item, vault, settings);
-      items.push(item);
+    try {
+      const raw = await vault.read(summaryP);
+      const summaryItems = extractFromSummary(raw, month.getFullYear());
+      for (const item of summaryItems) {
+        await attachChildrenFromEventNote(item, vault, settings);
+        items.push(item);
+      }
+    } catch (err) {
+      console.warn("[daily-note] 월간 종합 파싱 실패:", summaryP, err);
     }
   }
 
+  // 오늘 데일리 노트: 현재 진행중인 이월 항목
   const today = todayDate();
   if (sameYearMonth(today, month)) {
     const todayP = dailyNotePath(today, settings);
     if (vault.exists(todayP)) {
-      const raw = await vault.read(todayP);
-      const parsed = parseDailyNoteText(raw, today);
-      for (const block of parsed.carryoverBlocks) {
-        if (block.originDate && !block.isCompleted && !block.isDroppedImmediate) {
-          items.push({
-            name: block.topText,
-            section: "진행중",
-            status: "active",
-            start: block.originDate,
-            end: today,
-            children: block.children,
-            hasLongMarker: block.hasLongMarker,
-          });
+      try {
+        const raw = await vault.read(todayP);
+        const parsed = parseDailyNoteText(raw, today);
+        for (const block of parsed.carryoverBlocks) {
+          if (block.originDate && !block.isCompleted && !block.isDroppedImmediate) {
+            items.push({
+              name: block.topText,
+              section: "진행중",
+              status: "active",
+              start: block.originDate,
+              end: today,
+              children: block.children,
+              hasLongMarker: block.hasLongMarker,
+            });
+          }
         }
+      } catch (err) {
+        console.warn("[daily-note] 오늘 데일리 노트 파싱 실패:", todayP, err);
       }
     }
   }

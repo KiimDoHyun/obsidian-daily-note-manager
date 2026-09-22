@@ -219,6 +219,78 @@ describe("collectTimelineItems — 월간 종합 이벤트 5종 파싱", () => {
     });
   });
 
+  it("진행중·완료·드롭 세 섹션이 한 결과에 모두 담긴다 (사용자 시나리오)", async () => {
+    // 사용자 신고 시나리오: 새로고침 후 진행중·완료·드롭 세 상태가 모두 나와야 함.
+    // 종합 문서에 완료 2 + 드롭 1, 오늘 노트에 진행중 이월 3개 → 총 6개, 각 섹션 카운트 검증.
+    const vault = new InMemoryVault();
+    const settings = makeSettings();
+    const month = fromIsoDate("2026-09-01");
+    seedSummary(
+      vault,
+      month,
+      [
+        "### ✅ 완료",
+        "- 09-05 done1 (당일)",
+        "- 09-10 done2 (당일)",
+        "",
+        "### ⏭️ 드롭",
+        "- 09-12 dropped1 (즉시 드롭)",
+        "",
+      ].join("\n"),
+    );
+    await withFixedToday("2026-09-15", async () => {
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-15"), settings),
+        makeDailyNoteMd({
+          date: "2026-09-15",
+          activeLines: [],
+          carryoverLines: [
+            "- [ ] active1 (⏰ 3일째 이월, 09-11~)",
+            "- [ ] active2 (⏰ 2일째 이월, 09-12~)",
+            "- [ ] active3 (⏰ 1일째 이월, 09-14~)",
+          ],
+        }),
+      );
+      const items = await collectTimelineItems(month, vault, settings);
+      const bySection = {
+        진행중: items.filter((i) => i.section === "진행중").map((i) => i.name),
+        완료: items.filter((i) => i.section === "완료").map((i) => i.name),
+        드롭: items.filter((i) => i.section === "드롭").map((i) => i.name),
+      };
+      expect(bySection.진행중.sort()).toEqual(["active1", "active2", "active3"]);
+      expect(bySection.완료.sort()).toEqual(["done1", "done2"]);
+      expect(bySection.드롭).toEqual(["dropped1"]);
+    });
+  });
+
+  it("종합 파싱 실패해도 오늘 데일리의 진행중은 정상 수집 (에러 격리)", async () => {
+    // 사용자 vault 의 월간 종합 파일이 어떤 이유로 읽기 실패해도 오늘 이월 항목까지
+    // 통째로 날아가면 안 됨. 각 소스가 독립적으로 실패 격리되어야 UX 유지.
+    const vault = new InMemoryVault();
+    const settings = makeSettings();
+    const month = fromIsoDate("2026-09-01");
+    // 종합 파일이 존재하지만 read 가 실패하도록 함
+    seedSummary(vault, month, "");
+    const origRead = vault.read.bind(vault);
+    vault.read = async (p: string) => {
+      if (p.includes("종합")) throw new Error("simulated summary read failure");
+      return origRead(p);
+    };
+    await withFixedToday("2026-09-15", async () => {
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-15"), settings),
+        makeDailyNoteMd({
+          date: "2026-09-15",
+          carryoverLines: ["- [ ] survivor (⏰ 1일째 이월, 09-14~)"],
+        }),
+      );
+      const items = await collectTimelineItems(month, vault, settings);
+      // 종합 실패해도 오늘 이월 항목은 살아있음
+      const active = items.filter((i) => i.section === "진행중");
+      expect(active.map((i) => i.name)).toEqual(["survivor"]);
+    });
+  });
+
   it("완료·드롭 항목은 발생일 데일리에서 children 자동 부착", async () => {
     const vault = new InMemoryVault();
     const settings = makeSettings();
