@@ -53,7 +53,7 @@ function renderSingleBlock(block: TaskBlock, warnOrange: number, warnRed: number
 
 function renderTopLine(block: TaskBlock, warnOrange: number, warnRed: number): string {
   const origin = block.originDate ? mmddOf(block.originDate) : "??-??";
-  const tag = `(${block.carryoverDays}일째 이월, ${origin}~)`;
+  const tag = `(**${block.carryoverDays}일째** 이월, ${origin}~)`;
   // 마커 이모지는 라인 맨 앞이 아니라 드롭 경고 괄호 안에 넣는다.
   // 앞에 붙이면 마크다운 파서가 라인을 리스트로 인식하지 못해 체크박스·하위 항목이 깨진다.
   let suffix = "";

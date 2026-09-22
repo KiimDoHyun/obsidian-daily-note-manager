@@ -53,7 +53,7 @@ describe("Engine 은 language 설정과 무관하게 동일한 파일 포맷 생
       expect(md).toContain("## 📌 할일");
       expect(md).toContain("## ✅ 이월된 할일");
       expect(md).toContain("## 💬 메모");
-      expect(md).toContain("(1일째 이월, 09-14~)");
+      expect(md).toContain("(**1일째** 이월, 09-14~)");
     });
   });
 

@@ -79,7 +79,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toContain("- [ ] SNMP 개선 (1일째 이월, 09-14~)");
+      expect(md).toContain("- [ ] SNMP 개선 (**1일째** 이월, 09-14~)");
     });
   });
 
@@ -96,7 +96,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/^- \[ \] SNMP 개선 \(3일째 이월, 09-10~\) \(🟠 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] SNMP 개선 \(\*\*3일째\*\* 이월, 09-10~\) \(🟠 드롭 예정입니다\)$/m);
     });
   });
 
@@ -134,7 +134,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("Long task #장기 (5일째 이월, 09-08~)");
+      expect(todayMd).toContain("Long task #장기 (**5일째** 이월, 09-08~)");
       // #장기 는 경고 색상 제외
       expect(todayMd).not.toContain("드롭 예정");
     });
@@ -229,7 +229,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("- [ ] Parent (1일째 이월, 09-14~)");
+      expect(todayMd).toContain("- [ ] Parent (**1일째** 이월, 09-14~)");
       expect(todayMd).toContain("    - sub note");
       expect(todayMd).toContain("    - [x] sub done");
       expect(todayMd).toContain("        - deeper");
@@ -250,7 +250,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
-      expect(todayMd).toContain("- [ ] Friday task (1일째 이월, 09-18~)");
+      expect(todayMd).toContain("- [ ] Friday task (**1일째** 이월, 09-18~)");
     });
   });
 
@@ -295,7 +295,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("- [ ] Old format task (1일째 이월, 09-14~)");
+      expect(todayMd).toContain("- [ ] Old format task (**1일째** 이월, 09-14~)");
       // 오늘 노트는 새 섹션명으로 렌더
       expect(todayMd).toContain("## 📌 할일");
       expect(todayMd).toContain("## ✅ 이월된 할일");
@@ -409,7 +409,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
       // origin 은 09-17 로 잡히고 새 이월로 1일째로 표시.
-      expect(today).toContain("- [ ] Thu task (1일째 이월, 09-17~)");
+      expect(today).toContain("- [ ] Thu task (**1일째** 이월, 09-17~)");
     });
   });
 
@@ -447,7 +447,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-22"), settings))!;
-      expect(today).toContain("- [ ] Fri task (1일째 이월, 09-18~)");
+      expect(today).toContain("- [ ] Fri task (**1일째** 이월, 09-18~)");
     });
   });
 });

@@ -14,8 +14,9 @@ const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x-])\] (?<text>.
 // 드롭 경고 접미부는 두 포맷을 모두 인정한다.
 //   - 옛 포맷: `(드롭 예정입니다)`  (이모지는 라인 맨 앞)
 //   - 새 포맷: `(🟠 드롭 예정입니다)` / `(🔴 드롭 예정입니다)`
+// `**N일째**` 굵게 포맷과 옛 `N일째` 포맷 모두 인정한다.
 const CARRYOVER_TAG_RE =
-  /\s*\((?<days>\d+)일째 이월, (?<mm>\d{2})-(?<dd>\d{2})~\)(\s*\((?:🟠 |🔴 )?드롭 예정입니다\))?\s*$/;
+  /\s*\((?:\*\*)?(?<days>\d+)일째(?:\*\*)? 이월, (?<mm>\d{2})-(?<dd>\d{2})~\)(\s*\((?:🟠 |🔴 )?드롭 예정입니다\))?\s*$/;
 
 export function parseDailyNoteText(text: string, noteDate: Date): DailyNoteParsed {
   const lines = text.split(/\r?\n/);

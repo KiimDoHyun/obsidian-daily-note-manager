@@ -50,6 +50,25 @@ describe("parser: 최상위 라인 매치", () => {
     expect(toIsoDate(p.carryoverBlocks[0].originDate!)).toBe("2026-09-11");
   });
 
+  it("이월 태그 굵게(**N일째**) 새 포맷과 옛 포맷 모두 파싱", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      carryoverLines: [
+        "- [ ] Old (2일째 이월, 09-12~)",
+        "- [ ] New (**2일째** 이월, 09-12~)",
+        "- [ ] NewWithWarn (**4일째** 이월, 09-10~) (🔴 드롭 예정입니다)",
+      ],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(3);
+    expect(p.carryoverBlocks[0].topText).toBe("Old");
+    expect(p.carryoverBlocks[0].carryoverDays).toBe(2);
+    expect(p.carryoverBlocks[1].topText).toBe("New");
+    expect(p.carryoverBlocks[1].carryoverDays).toBe(2);
+    expect(p.carryoverBlocks[2].topText).toBe("NewWithWarn");
+    expect(p.carryoverBlocks[2].carryoverDays).toBe(4);
+  });
+
   it("경고 이모지가 라인 맨 앞(옛 포맷)이든 괄호 안(새 포맷)이든 모두 인식", () => {
     const md = makeDailyNoteMd({
       date: "2026-09-15",
