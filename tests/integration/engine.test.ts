@@ -65,7 +65,7 @@ describe("Engine.createForToday — 시나리오", () => {
 
       const todayPath = dailyNotePath(fromIsoDate("2026-09-15"), settings);
       const md = vault.peek(todayPath)!;
-      expect(md).toContain("## ✅ 이월된 할일 (0)\n\n## 💬 메모");
+      expect(md).toContain("## ✅ 이월된 할일\n> 오늘 이월 0건\n\n## 💬 메모");
     });
   });
 
@@ -80,7 +80,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toContain("- [ ] SNMP 개선 (**1일째** 이월, 09-14~)");
+      expect(md).toContain("- [ ] SNMP 개선 (⏰ 1일째 이월, 09-14~)");
     });
   });
 
@@ -97,7 +97,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/^- \[ \] SNMP 개선 \(\*\*3일째\*\* 이월, 09-10~\) \(🟠 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] SNMP 개선 \(⏰ 3일째 이월, 09-10~\) \(🟠 드롭 예정입니다\)$/m);
     });
   });
 
@@ -135,7 +135,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("Long task #장기 (**5일째** 이월, 09-08~)");
+      expect(todayMd).toContain("Long task #장기 (⏰ 5일째 이월, 09-08~)");
       // #장기 는 경고 색상 제외
       expect(todayMd).not.toContain("드롭 예정");
     });
@@ -230,7 +230,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("- [ ] Parent (**1일째** 이월, 09-14~)");
+      expect(todayMd).toContain("- [ ] Parent (⏰ 1일째 이월, 09-14~)");
       expect(todayMd).toContain("    - sub note");
       expect(todayMd).toContain("    - [x] sub done");
       expect(todayMd).toContain("        - deeper");
@@ -251,7 +251,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
-      expect(todayMd).toContain("- [ ] Friday task (**1일째** 이월, 09-18~)");
+      expect(todayMd).toContain("- [ ] Friday task (⏰ 1일째 이월, 09-18~)");
     });
   });
 
@@ -296,7 +296,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).toContain("- [ ] Old format task (**1일째** 이월, 09-14~)");
+      expect(todayMd).toContain("- [ ] Old format task (⏰ 1일째 이월, 09-14~)");
       // 오늘 노트는 새 섹션명으로 렌더
       expect(todayMd).toContain("## 📌 할일");
       expect(todayMd).toContain("## ✅ 이월된 할일");
@@ -342,7 +342,7 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
       // 순서: 모두 1일째, 원문 순서 유지. 각 블록 사이 구분 확인.
       expect(md).toMatch(
         new RegExp(
-          `- \\[ \\] A \\(\\*\\*1일째\\*\\*[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] B \\(\\*\\*1일째\\*\\*[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] C \\(\\*\\*1일째\\*\\*`,
+          `- \\[ \\] A \\(⏰ 1일째[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] B \\(⏰ 1일째[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] C \\(⏰ 1일째`,
         ),
       );
     });
@@ -393,11 +393,12 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
   });
 });
 
-// 이월 섹션 헤더에 카운트를 붙여 사용자가 오늘 몇 개의 항목이 이월됐는지
-// 헤더만 봐도 파악할 수 있게 한다. 파서는 카운트 유무와 무관하게 헤더를
-// 인식하므로 옛 노트도 문제 없이 파싱된다.
-describe("Engine.createForToday — 이월 섹션 헤더 카운트", () => {
-  it("이월 3개면 헤더가 `## ✅ 이월된 할일 (3)`", async () => {
+// 이월 항목 카운트를 헤더 아래 blockquote 라인으로 표시해 사용자가 오늘 몇 개의
+// 항목이 이월됐는지 노트만 열어도 즉시 파악할 수 있게 한다. 헤더 자체는 canonical
+// 이름 그대로 유지되어 아웃라인 뷰에서 매일 이름이 흔들리지 않는다. 파서는 헤더에
+// 카운트가 붙어있든(옛 포맷) blockquote 로 있든(새 포맷) 모두 인식한다.
+describe("Engine.createForToday — 이월 카운트 blockquote 표시", () => {
+  it("이월 3개면 헤더는 canonical 유지, 아래 blockquote 에 `오늘 이월 3건`", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
@@ -410,27 +411,29 @@ describe("Engine.createForToday — 이월 섹션 헤더 카운트", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/^## ✅ 이월된 할일 \(3\)$/m);
+      expect(md).toMatch(/^## ✅ 이월된 할일$/m);
+      expect(md).toMatch(/^> 오늘 이월 3건$/m);
     });
   });
 
-  it("이월 0개여도 헤더는 `(0)` 로 항상 표시", async () => {
+  it("이월 0개여도 blockquote 는 `0건` 으로 항상 표시", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine } = makeEngine(vault);
       const res = await engine.createForToday();
       expect(res.created).toBe(true);
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), makeSettings()))!;
-      expect(md).toMatch(/^## ✅ 이월된 할일 \(0\)$/m);
+      expect(md).toMatch(/^## ✅ 이월된 할일$/m);
+      expect(md).toMatch(/^> 오늘 이월 0건$/m);
     });
   });
 
-  it("어제 카운트가 붙은 헤더도 파서가 인식하여 재렌더링 시 카운트가 올바르게 갱신", async () => {
+  it("어제 카운트가 헤더에 붙은 옛 포맷 노트도 재렌더 시 정상 갱신", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
-      // 어제 카운트가 (2) 인 상태로 시드. 그중 하나는 완료 표시된 채 남아있음.
-      // 파서는 카운트를 무시하고 섹션을 찾아야 하고, 오늘 이월은 남은 1개(A) 만.
+      // 어제 노트가 옛 포맷(헤더에 카운트 부착) 인 상태.
+      // 파서는 canonicalize 로 헤더를 인식하고, 이월 하나(B) 는 완료로 처리해 A 만 이월.
       const seed = [
         "---",
         "date: 2026-09-14",
@@ -452,22 +455,23 @@ describe("Engine.createForToday — 이월 섹션 헤더 카운트", () => {
       vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/^## ✅ 이월된 할일 \(1\)$/m);
-      expect(md).toContain("- [ ] A (**2일째** 이월, 09-13~)");
+      expect(md).toMatch(/^## ✅ 이월된 할일$/m);
+      expect(md).toMatch(/^> 오늘 이월 1건$/m);
+      expect(md).toContain("- [ ] A (⏰ 2일째 이월, 09-13~)");
       expect(md).not.toContain("- [ ] B");
     });
   });
 });
 
-// 굵게 태그(**N일째**) + 이월 블록 사이 CARRYOVER_SEPARATOR + 카운트 헤더(N) 세 가지가
-// 모두 얹혀있는 어제 노트를 실제로 파싱→이월→오늘 재렌더링할 때, 각 UX 개선이
-// 서로 간섭 없이 살아 있는지 확인한다. 각 커밋별 개별 테스트만으론 조합 회귀를 놓친다.
+// 이모지 태그(⏰) + 이월 블록 사이 CARRYOVER_SEPARATOR + 카운트 blockquote 세 가지가
+// 모두 얹혀있는 어제 노트를 파싱→이월→오늘 재렌더링할 때, 각 UX 개선이 서로 간섭
+// 없이 살아 있는지 확인한다. 각 커밋별 개별 테스트만으론 조합 회귀를 놓친다.
 describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () => {
-  it("굵게 태그 + 구분선 + 카운트 헤더가 다일 왕복에서 일관되게 유지", async () => {
+  it("이모지 태그 + 구분선 + 카운트 blockquote 가 다일 왕복에서 일관되게 유지", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
-      // 어제(2026-09-14) 노트를 실제 라이터가 만들었을 법한 형태로 시드.
+      // 어제(2026-09-14) 노트를 실제 라이터가 만들었을 법한 최신 포맷으로 시드.
       const seed = [
         "---",
         "date: 2026-09-14",
@@ -478,17 +482,19 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
         "",
         "## 📌 할일",
         "",
-        "## ✅ 이월된 할일 (3)",
-        "- [ ] A (**3일째** 이월, 09-11~) (🟠 드롭 예정입니다)",
+        "## ✅ 이월된 할일",
+        "> 오늘 이월 3건",
+        "",
+        "- [ ] A (⏰ 3일째 이월, 09-11~) (🟠 드롭 예정입니다)",
         "    - 세부 메모",
         "",
         CARRYOVER_SEPARATOR,
         "",
-        "- [ ] B (**2일째** 이월, 09-12~)",
+        "- [ ] B (⏰ 2일째 이월, 09-12~)",
         "",
         CARRYOVER_SEPARATOR,
         "",
-        "- [ ] C (**1일째** 이월, 09-13~)",
+        "- [ ] C (⏰ 1일째 이월, 09-13~)",
         "",
         "## 💬 메모",
         "",
@@ -498,13 +504,14 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
 
-      // 1. 카운트 헤더가 그대로 3개로 유지
-      expect(md).toMatch(/^## ✅ 이월된 할일 \(3\)$/m);
+      // 1. 헤더 canonical 유지, blockquote 카운트 3건
+      expect(md).toMatch(/^## ✅ 이월된 할일$/m);
+      expect(md).toMatch(/^> 오늘 이월 3건$/m);
 
-      // 2. 굵게 태그 세 항목 모두 그대로 승격 (일수는 각 +1)
-      expect(md).toContain("- [ ] A (**4일째** 이월, 09-11~)");
-      expect(md).toContain("- [ ] B (**3일째** 이월, 09-12~)");
-      expect(md).toContain("- [ ] C (**2일째** 이월, 09-13~)");
+      // 2. 이모지 태그 세 항목 모두 그대로 승격 (일수 각 +1)
+      expect(md).toContain("- [ ] A (⏰ 4일째 이월, 09-11~)");
+      expect(md).toContain("- [ ] B (⏰ 3일째 이월, 09-12~)");
+      expect(md).toContain("- [ ] C (⏰ 2일째 이월, 09-13~)");
 
       // 3. A 의 자식 메모가 소실되지 않고 유지
       expect(md).toContain("    - 세부 메모");
@@ -533,8 +540,10 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
         "",
         "## 📌 할일",
         "",
-        "## ✅ 이월된 할일 (1)",
-        "- [ ] Meeting (**1일째** 이월, 09-13~)",
+        "## ✅ 이월된 할일",
+        "> 오늘 이월 1건",
+        "",
+        "- [ ] Meeting (⏰ 1일째 이월, 09-13~)",
         "    - 요약",
         "    ---", // 사용자가 자식 안에 손으로 넣은 가로선
         "    - 결론",
@@ -546,7 +555,7 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
 
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toContain("- [ ] Meeting (**2일째** 이월, 09-13~)");
+      expect(md).toContain("- [ ] Meeting (⏰ 2일째 이월, 09-13~)");
       expect(md).toContain("    - 요약");
       expect(md).toContain("    ---");
       expect(md).toContain("    - 결론");
@@ -567,12 +576,14 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
         "",
         "## 📌 할일",
         "",
-        "## ✅ 이월된 할일 (2) — 오후에 확인", // 사용자 자유 편집
-        "- [ ] X (**1일째** 이월, 09-13~)",
+        "## ✅ 이월된 할일 — 오후에 확인", // 사용자 자유 편집
+        "> 오늘 이월 2건",
+        "",
+        "- [ ] X (⏰ 1일째 이월, 09-13~)",
         "",
         CARRYOVER_SEPARATOR,
         "",
-        "- [ ] Y (**1일째** 이월, 09-13~)",
+        "- [ ] Y (⏰ 1일째 이월, 09-13~)",
         "",
         "## 💬 메모",
         "",
@@ -582,10 +593,97 @@ describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () 
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
       // 헤더 편집에도 X 와 Y 모두 오늘로 이월됨 (옛 정책이면 헤더 인식 실패로 통째 소실).
-      expect(md).toContain("- [ ] X (**2일째** 이월, 09-13~)");
-      expect(md).toContain("- [ ] Y (**2일째** 이월, 09-13~)");
-      // 오늘 헤더는 canonical form + 새 카운트로 재렌더
-      expect(md).toMatch(/^## ✅ 이월된 할일 \(2\)$/m);
+      expect(md).toContain("- [ ] X (⏰ 2일째 이월, 09-13~)");
+      expect(md).toContain("- [ ] Y (⏰ 2일째 이월, 09-13~)");
+      // 오늘 헤더는 canonical + blockquote 카운트로 재렌더
+      expect(md).toMatch(/^## ✅ 이월된 할일$/m);
+      expect(md).toMatch(/^> 오늘 이월 2건$/m);
+    });
+  });
+});
+
+// 사용자가 이월 항목의 자식 안에 시각적 여백 목적으로 빈 줄을 넣어도, 매일 재렌더링
+// 되면서 사라지지 않아야 한다. 이전 정책은 자식 뒤 blank 을 자동 트림해 사용자 편집을
+// 소실시켰다. 새 정책은 구조적 blank(구분선 짝) 만 정확 제거하고 사용자 blank 은 보존.
+describe("Engine.createForToday — 자식 blank 보존과 왕복 안정성", () => {
+  it("자식 중간 빈 줄이 다음날 노트에도 유지된다", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일",
+        "> 오늘 이월 1건",
+        "",
+        "- [ ] Meeting (⏰ 1일째 이월, 09-13~)",
+        "    - 요약1",
+        "    - 요약2",
+        "", // 사용자가 시각적 구분 목적으로 넣은 빈 줄
+        "    - 후속조치",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      // 자식 중간 빈 줄이 그대로 유지됨
+      expect(md).toMatch(/    - 요약2\n\n    - 후속조치/);
+    });
+  });
+
+  it("이월 여러 개 + 자식 blank 조합이 왕복 시 안정적", async () => {
+    // 이월 3개, 각 자식에 blank 조합. 다음 날 렌더에서 blank 축적/소실 없이 그대로.
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일",
+        "> 오늘 이월 3건",
+        "",
+        "- [ ] A (⏰ 1일째 이월, 09-13~)",
+        "    - a-child",
+        "",
+        "    - a-child-2",
+        "",
+        CARRYOVER_SEPARATOR,
+        "",
+        "- [ ] B (⏰ 1일째 이월, 09-13~)",
+        "    - b-child",
+        "",
+        CARRYOVER_SEPARATOR,
+        "",
+        "- [ ] C (⏰ 1일째 이월, 09-13~)",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+
+      // A 의 자식 중간 blank 이 유지되어야 함
+      expect(md).toMatch(/    - a-child\n\n    - a-child-2/);
+
+      // 구분선은 여전히 정확히 2개 (블록 사이)
+      const sepRegex = new RegExp(`^${CARRYOVER_SEPARATOR}$`, "gm");
+      expect((md.match(sepRegex) ?? []).length).toBe(2);
+
+      // 자식이 구분선을 흡수해 A/B 사이 구분선이 두 개로 늘지 않았는지
+      expect(md).not.toMatch(new RegExp(`${CARRYOVER_SEPARATOR}\\n\\n${CARRYOVER_SEPARATOR}`));
     });
   });
 });
@@ -683,7 +781,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
       // origin 은 09-17 로 잡히고 새 이월로 1일째로 표시.
-      expect(today).toContain("- [ ] Thu task (**1일째** 이월, 09-17~)");
+      expect(today).toContain("- [ ] Thu task (⏰ 1일째 이월, 09-17~)");
     });
   });
 
@@ -702,7 +800,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
       // origin 을 못 찾아 이월 없이 빈 이월 섹션.
       expect(today).not.toContain("very old task");
-      expect(today).toContain("## ✅ 이월된 할일 (0)\n\n## 💬 메모");
+      expect(today).toContain("## ✅ 이월된 할일\n> 오늘 이월 0건\n\n## 💬 메모");
     });
   });
 
@@ -721,7 +819,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-22"), settings))!;
-      expect(today).toContain("- [ ] Fri task (**1일째** 이월, 09-18~)");
+      expect(today).toContain("- [ ] Fri task (⏰ 1일째 이월, 09-18~)");
     });
   });
 });

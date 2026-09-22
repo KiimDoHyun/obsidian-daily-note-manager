@@ -114,8 +114,8 @@ describe("warn 오프셋 설정 배선 (드롭 기준 N일 전)", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toContain("- [ ] Orange (**3일째** 이월, 09-12~) (🟠 드롭 예정입니다)");
-      expect(md).toContain("- [ ] Red (**4일째** 이월, 09-11~) (🔴 드롭 예정입니다)");
+      expect(md).toContain("- [ ] Orange (⏰ 3일째 이월, 09-12~) (🟠 드롭 예정입니다)");
+      expect(md).toContain("- [ ] Red (⏰ 4일째 이월, 09-11~) (🔴 드롭 예정입니다)");
     });
   });
 
@@ -137,8 +137,8 @@ describe("warn 오프셋 설정 배선 (드롭 기준 N일 전)", () => {
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
       expect(md).not.toMatch(/Chill.*드롭 예정/);
-      expect(md).toMatch(/^- \[ \] Orange \(\*\*8일째\*\* 이월.*\(🟠 드롭 예정입니다\)$/m);
-      expect(md).toMatch(/^- \[ \] Red \(\*\*9일째\*\* 이월.*\(🔴 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] Orange \(⏰ 8일째 이월.*\(🟠 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] Red \(⏰ 9일째 이월.*\(🔴 드롭 예정입니다\)$/m);
     });
   });
 
@@ -161,8 +161,8 @@ describe("warn 오프셋 설정 배선 (드롭 기준 N일 전)", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/^- \[ \] Early \(\*\*2일째\*\* 이월.*\(🟠 드롭 예정입니다\)$/m);
-      expect(md).toMatch(/^- \[ \] Late \(\*\*4일째\*\* 이월.*\(🔴 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] Early \(⏰ 2일째 이월.*\(🟠 드롭 예정입니다\)$/m);
+      expect(md).toMatch(/^- \[ \] Late \(⏰ 4일째 이월.*\(🔴 드롭 예정입니다\)$/m);
     });
   });
 });

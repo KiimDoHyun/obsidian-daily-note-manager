@@ -90,12 +90,9 @@ describe("parser: section 분리", () => {
     expect(p.carryoverBlocks).toHaveLength(0);
   });
 
-  it("코드블록 안의 `## ✅ 이월된 할일` 은 섹션 헤더로 오탐 (기존 한계, 회귀 감지용)", () => {
-    // splitSections 는 코드펜스 상태를 추적하지 않는다. 코드블록 안의 `## ` 라인도
-    // 실제 섹션 헤더로 인식돼 이월 섹션에 추가된다. Map 은 같은 키에 대해 append 하므로
-    // 실제 이월 + 코드블록 예시가 한 섹션에 섞여 파싱된다.
-    // 이 오탐은 이번 커밋 이전부터 존재하는 한계. 향후 코드펜스 추적을 도입하면
-    // 아래 assertion 을 `toHaveLength(1)` 로 뒤집으면 회귀가 잡힌다.
+  it("코드블록(```) 안의 `## ` 라인은 섹션 헤더로 오탐하지 않는다", () => {
+    // splitSections 는 코드펜스 상태를 추적한다. 코드블록 안의 `## ` 라인은
+    // 실제 마크다운 헤더가 아니라 예시 텍스트이므로 섹션 경계로 취급하지 않는다.
     const md = [
       "---",
       "date: 2026-09-15",
@@ -105,7 +102,7 @@ describe("parser: section 분리", () => {
       "## 📌 할일",
       "",
       "## ✅ 이월된 할일",
-      "- [ ] real carry (**1일째** 이월, 09-14~)",
+      "- [ ] real carry (⏰ 1일째 이월, 09-14~)",
       "",
       "## 💬 메모",
       "```",
@@ -115,10 +112,33 @@ describe("parser: section 분리", () => {
       "",
     ].join("\n");
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
-    // 코드블록 안 헤더 오탐으로 이월 섹션 배열에 두 블록이 append 됨.
-    expect(p.carryoverBlocks).toHaveLength(2);
+    // 코드펜스 인식으로 진짜 이월 항목만 인식됨.
+    expect(p.carryoverBlocks).toHaveLength(1);
     expect(p.carryoverBlocks[0].topText).toBe("real carry");
-    expect(p.carryoverBlocks[1].topText).toBe("example in code");
+  });
+
+  it("코드블록(~~~) 안의 `## ` 라인도 오탐 방지", () => {
+    const md = [
+      "---",
+      "date: 2026-09-15",
+      "tags: [daily]",
+      "---",
+      "",
+      "## 📌 할일",
+      "",
+      "## ✅ 이월된 할일",
+      "- [ ] real carry (⏰ 1일째 이월, 09-14~)",
+      "",
+      "## 💬 메모",
+      "~~~",
+      "## ✅ 이월된 할일",
+      "- [ ] example in tilde code",
+      "~~~",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(1);
+    expect(p.carryoverBlocks[0].topText).toBe("real carry");
   });
 
   it("옛 섹션명(오늘의 목표/미완료 이월)도 하위호환 인식", () => {
@@ -301,13 +321,30 @@ describe("parser: 블록 (하위 라인)", () => {
     expect(p.activeBlocks[0].children).toEqual(["\t- sub"]);
   });
 
-  it("블록 뒤 빈 줄은 트림", () => {
+  it("중간 블록의 자식 뒤 빈 줄은 보존 (사용자 편집 존중)", () => {
+    // 정책 변경: 이전엔 자식 뒤 blank 을 자동 트림했지만, 사용자가 시각적 여백 목적으로
+    // 넣은 blank 을 지우는 부작용이 있었다. 이제 중간 블록은 blank 을 그대로 보존하고
+    // 왕복 시 축적은 구분선 스마트 처리로 방지한다.
     const md = makeDailyNoteMd({
       date: "2026-09-15",
       activeLines: ["- [ ] A", "    - sub", "", "- [ ] B"],
     });
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
-    expect(p.activeBlocks[0].children).toEqual(["    - sub"]);
+    expect(p.activeBlocks[0].children).toEqual(["    - sub", ""]);
+  });
+
+  it("섹션 마지막 블록만 뒤 구조적 blank 1개를 제거 (축적 방지)", () => {
+    // 마지막 블록은 뒤에 섹션 헤더가 오는데, 헤더 앞에는 라이터가 항상 blank 1개를
+    // 삽입한다. 이 구조적 blank 을 남기면 왕복마다 blank 이 쌓이므로 정확히 1개 제거.
+    // 그 이상의 사용자 편집 blank 은 보존.
+    // 아래 fixture 는 사용자 blank 2개 + 라이터 구조적 blank 1개 = 총 3개.
+    // 정책상 하나만 pop 하여 사용자 blank 2개는 보존.
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      activeLines: ["- [ ] Only", "    - sub", "", ""],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks[0].children).toEqual(["    - sub", "", ""]);
   });
 });
 

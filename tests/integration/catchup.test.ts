@@ -73,10 +73,10 @@ describe("Engine.catchUp — 놓친 영업일 이어잡기", () => {
       expect(fri).toBeDefined();
 
       // 카운터가 하루씩 올라가는지: 16 → 1일째, 17 → 2일째, 18 → 3일째
-      expect(wed!).toContain("- [ ] task A (**1일째** 이월, 09-15~)");
-      expect(thu!).toContain("- [ ] task A (**2일째** 이월, 09-15~)");
+      expect(wed!).toContain("- [ ] task A (⏰ 1일째 이월, 09-15~)");
+      expect(thu!).toContain("- [ ] task A (⏰ 2일째 이월, 09-15~)");
       // 09-17 → 09-18 은 3일째로 접어드는 시점 → 🟠 경고 부착
-      expect(fri!).toMatch(/^- \[ \] task A \(\*\*3일째\*\* 이월, 09-15~\) \(🟠 드롭 예정입니다\)$/m);
+      expect(fri!).toMatch(/^- \[ \] task A \(⏰ 3일째 이월, 09-15~\) \(🟠 드롭 예정입니다\)$/m);
     });
   });
 

@@ -18,6 +18,10 @@ export const MARKER_LONG = "#장기";
 // 입력할 가능성이 사실상 없어 파서에서 "우리가 넣은 구분선" 만 안전하게 걸러낼 수 있다.
 export const CARRYOVER_SEPARATOR = "-".repeat(17);
 
+// 이월 태그의 시각 강조 이모지. 굵게(**) 를 쓰면 사용자 항목 이름에 있는 별표와 짝이
+// 어긋나 프리뷰가 이상하게 렌더될 수 있어 이모지 앞머리로 대체.
+export const CARRYOVER_TAG_MARKER = "⏰";
+
 export const WARN_ORANGE = "🟠";
 export const WARN_RED = "🔴";
 export const DROP_WARNING_TEXT = "드롭 예정입니다";

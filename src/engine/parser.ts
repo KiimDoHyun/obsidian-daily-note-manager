@@ -1,6 +1,7 @@
 import {
   CARRYOVER_SECTION_HEADERS,
   CARRYOVER_SEPARATOR,
+  CARRYOVER_TAG_MARKER,
   MARKER_ARCHIVE,
   MARKER_LONG,
   SECTION_MEMO,
@@ -23,9 +24,14 @@ const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x-])\] (?<text>.
 // 드롭 경고 접미부는 두 포맷을 모두 인정한다.
 //   - 옛 포맷: `(드롭 예정입니다)`  (이모지는 라인 맨 앞)
 //   - 새 포맷: `(🟠 드롭 예정입니다)` / `(🔴 드롭 예정입니다)`
-// `**N일째**` 굵게 포맷과 옛 `N일째` 포맷 모두 인정한다.
-const CARRYOVER_TAG_RE =
-  /\s*\((?:\*\*)?(?<days>\d+)일째(?:\*\*)? 이월, (?<mm>\d{2})-(?<dd>\d{2})~\)(\s*\((?:🟠 |🔴 )?드롭 예정입니다\))?\s*$/;
+// 이월 태그 앞머리는 세 포맷을 모두 인정한다.
+//   - 최신: `(⏰ N일째 이월, ...)` — 별표 미사용, 사용자 텍스트 별표와 충돌 없음
+//   - 중간: `(**N일째** 이월, ...)` — 굵게, 짧게 존재했던 포맷
+//   - 옛: `(N일째 이월, ...)` — 최초 포맷
+const CARRYOVER_TAG_RE = new RegExp(
+  `\\s*\\((?:${CARRYOVER_TAG_MARKER} )?(?:\\*\\*)?(?<days>\\d+)일째(?:\\*\\*)? 이월, ` +
+    `(?<mm>\\d{2})-(?<dd>\\d{2})~\\)(\\s*\\((?:🟠 |🔴 )?드롭 예정입니다\\))?\\s*$`,
+);
 
 export function parseDailyNoteText(text: string, noteDate: Date): DailyNoteParsed {
   const lines = text.split(/\r?\n/);
@@ -45,9 +51,21 @@ export function parseDailyNoteText(text: string, noteDate: Date): DailyNoteParse
 function splitSections(lines: string[]): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string | null = null;
+  // 코드펜스(```, ~~~) 안의 `## ` 는 실제 헤더가 아니라 코드 예시이므로 섹션 경계로 취급 안 함.
+  // 백틱과 물결표(tilde) 각각 독립적으로 짝짓지만, 대부분 노트에서는 백틱만 쓴다.
+  let openFence: string | null = null;
   for (const line of lines) {
     const stripped = line.replace(/\s+$/, "");
-    if (stripped.startsWith("## ")) {
+    const fenceMatch = /^(```|~~~)/.exec(stripped);
+    if (fenceMatch) {
+      const fence = fenceMatch[1];
+      if (openFence === null) openFence = fence;
+      else if (openFence === fence) openFence = null;
+      // 코드펜스 라인 자체도 섹션 내용으로 유지
+      if (current !== null) sections.get(current)!.push(line);
+      continue;
+    }
+    if (openFence === null && stripped.startsWith("## ")) {
       current = canonicalizeHeader(stripped);
       if (!sections.has(current)) sections.set(current, []);
     } else if (current !== null) {
@@ -85,28 +103,49 @@ function parseBlocks(lines: string[], noteDate: Date, isCarryover: boolean): Tas
   const blocks: TaskBlock[] = [];
   let current: TaskBlock | null = null;
   let currentChildren: string[] = [];
+  // 라이터는 이월 블록 사이에 항상 `["", CARRYOVER_SEPARATOR, ""]` 짝으로 삽입한다.
+  // 구분선을 만나면 그 앞뒤 구조적 빈 줄도 함께 걷어내야 왕복 시 blank 이 누적되지 않는다.
+  // 사용자가 자식 안에 직접 넣은 blank 은 이 처리와 무관하게 그대로 보존된다.
+  let skipNextBlank = false;
+
+  const finalizeCurrent = (isLast: boolean) => {
+    if (current === null) return;
+    // 마지막 블록만 뒤 섹션 헤더 앞의 구조적 blank 1개를 제거.
+    // 중간 블록은 구분선 스마트 처리에서 이미 정리되므로 trim 불필요.
+    // 그 이상의 trailing blank 은 사용자 편집으로 보고 보존.
+    let children = currentChildren;
+    if (isLast && children.length > 0 && children[children.length - 1] === "") {
+      children = children.slice(0, -1);
+    }
+    current.children = children;
+    blocks.push(current);
+  };
 
   for (const raw of lines) {
     if (isTopLevelLine(raw)) {
-      if (current !== null) {
-        current.children = trimTrailingBlank(currentChildren);
-        blocks.push(current);
-      }
+      finalizeCurrent(false);
       current = newBlockFromLine(raw, noteDate, isCarryover);
       currentChildren = [];
+      skipNextBlank = false;
     } else {
       if (current === null) continue;
-      // 이월 섹션의 블록 사이 시각적 구분선(정확히 CARRYOVER_SEPARATOR 인 라인) 만 걸러낸다.
-      // 사용자가 하위 메모에 `---` 나 다른 형태의 가로선을 손으로 넣은 경우는 그대로 보존.
-      // 정확 일치(trim 없음) 로 검사하므로 들여쓴 자식 라인도 영향 없음.
-      if (isCarryover && raw === CARRYOVER_SEPARATOR) continue;
+      if (isCarryover && raw === CARRYOVER_SEPARATOR) {
+        // 구조적 blank 짝의 앞쪽: 마지막 자식이 blank 이면 걷어냄.
+        if (currentChildren.length > 0 && currentChildren[currentChildren.length - 1] === "") {
+          currentChildren.pop();
+        }
+        // 구조적 blank 짝의 뒤쪽: 다음 blank 라인을 스킵.
+        skipNextBlank = true;
+        continue;
+      }
+      if (skipNextBlank) {
+        skipNextBlank = false;
+        if (raw === "") continue;
+      }
       currentChildren.push(raw);
     }
   }
-  if (current !== null) {
-    current.children = trimTrailingBlank(currentChildren);
-    blocks.push(current);
-  }
+  finalizeCurrent(true);
   return blocks;
 }
 
@@ -149,12 +188,6 @@ function newBlockFromLine(line: string, noteDate: Date, isCarryover: boolean): T
     carryoverDays,
     originDate,
   });
-}
-
-function trimTrailingBlank(children: string[]): string[] {
-  let end = children.length;
-  while (end > 0 && children[end - 1].trim() === "") end--;
-  return children.slice(0, end);
 }
 
 function stripFooter(memoLines: string[]): string[] {
