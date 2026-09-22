@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Engine } from "../../src/engine";
+import { CARRYOVER_SEPARATOR } from "../../src/engine/constants";
 import { fromIsoDate, toIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
@@ -316,11 +317,13 @@ describe("Engine.createForToday — 시나리오", () => {
   });
 });
 
-// 이월 항목이 여러 개면 서로 시각적으로 잘 안 구분됨. 라이터가 블록 사이에 --- 구분선을
-// 넣고, 파서는 그 구분선을 삼켜서 재렌더링 시 중복이 안 생기도록 한다. 이 두 가지가
-// 함께 성립해야 사용자 경험이 유지됨.
+// 이월 항목이 여러 개면 서로 시각적으로 잘 안 구분됨. 라이터가 블록 사이에 CARRYOVER_SEPARATOR
+// (사용자가 손으로 쓰기 어려운 17글자 대시) 를 넣고, 파서는 그 정확한 문자열만 자식에서 걸러
+// 재렌더링 시 중복이 안 생기도록 한다. 사용자가 하위 메모에 `---` 등을 넣어도 보존됨.
 describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
-  it("이월 항목이 여러 개일 때 블록 사이에 --- 삽입, 처음·끝에는 없음", async () => {
+  const sepRegex = new RegExp(`^${CARRYOVER_SEPARATOR}$`, "gm");
+
+  it("이월 항목이 여러 개일 때 블록 사이에 구분선 삽입, 처음·끝에는 없음", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
@@ -333,13 +336,14 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      // A/B/C 사이에 --- 두 번 (블록 3개 → 사이 2개)
-      const separatorCount = (md.match(/^---$/gm) ?? []).length;
-      // 노트 최상단 frontmatter 의 --- 2개 + 푸터 --- 1개 + 이월 블록 사이 2개 = 5개
-      expect(separatorCount).toBe(5);
-      // 순서: A(가장 오래됨은 없고 모두 1일째) 는 원문 순서 유지. 각 블록 사이 구분 확인.
+      // 블록 3개 → 사이 구분선 2개
+      const separatorCount = (md.match(sepRegex) ?? []).length;
+      expect(separatorCount).toBe(2);
+      // 순서: 모두 1일째, 원문 순서 유지. 각 블록 사이 구분 확인.
       expect(md).toMatch(
-        /- \[ \] A \(\*\*1일째\*\*[^\n]*\n\n---\n\n- \[ \] B \(\*\*1일째\*\*[^\n]*\n\n---\n\n- \[ \] C \(\*\*1일째\*\*/,
+        new RegExp(
+          `- \\[ \\] A \\(\\*\\*1일째\\*\\*[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] B \\(\\*\\*1일째\\*\\*[^\\n]*\\n\\n${CARRYOVER_SEPARATOR}\\n\\n- \\[ \\] C \\(\\*\\*1일째\\*\\*`,
+        ),
       );
     });
   });
@@ -354,13 +358,12 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      // frontmatter 2개 + 푸터 1개 = 3개. 이월 섹션 내부에는 없음.
-      const separatorCount = (md.match(/^---$/gm) ?? []).length;
-      expect(separatorCount).toBe(3);
+      const separatorCount = (md.match(sepRegex) ?? []).length;
+      expect(separatorCount).toBe(0);
     });
   });
 
-  it("어제 노트가 이미 --- 를 포함해도 오늘 재렌더링 시 중복되지 않음", async () => {
+  it("어제 노트가 이미 구분선을 포함해도 오늘 재렌더링 시 중복되지 않음", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-15", async () => {
       const { engine, settings } = makeEngine(vault);
@@ -373,7 +376,7 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
           carryoverLines: [
             "- [ ] A (**2일째** 이월, 09-12~)",
             "",
-            "---",
+            CARRYOVER_SEPARATOR,
             "",
             "- [ ] B (**1일째** 이월, 09-13~)",
           ],
@@ -381,11 +384,11 @@ describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      // 이월 블록 사이 --- 는 여전히 정확히 1개. 파서가 어제 것을 삼키고 라이터가 새로 넣음.
-      const separatorCount = (md.match(/^---$/gm) ?? []).length;
-      expect(separatorCount).toBe(3 + 1); // frontmatter 2 + 푸터 1 + 이월 블록 2개 사이 1개
-      // A 의 자식으로 --- 가 딸려 들어가지 않았는지 확인
-      expect(md).not.toMatch(/- \[ \] A[^\n]*\n---/);
+      // 블록 2개 사이 구분선 1개
+      const separatorCount = (md.match(sepRegex) ?? []).length;
+      expect(separatorCount).toBe(1);
+      // A 의 자식으로 구분선이 딸려 들어가지 않았는지 확인
+      expect(md).not.toMatch(new RegExp(`- \\[ \\] A[^\\n]*\\n${CARRYOVER_SEPARATOR}`));
     });
   });
 });
@@ -452,6 +455,137 @@ describe("Engine.createForToday — 이월 섹션 헤더 카운트", () => {
       expect(md).toMatch(/^## ✅ 이월된 할일 \(1\)$/m);
       expect(md).toContain("- [ ] A (**2일째** 이월, 09-13~)");
       expect(md).not.toContain("- [ ] B");
+    });
+  });
+});
+
+// 굵게 태그(**N일째**) + 이월 블록 사이 CARRYOVER_SEPARATOR + 카운트 헤더(N) 세 가지가
+// 모두 얹혀있는 어제 노트를 실제로 파싱→이월→오늘 재렌더링할 때, 각 UX 개선이
+// 서로 간섭 없이 살아 있는지 확인한다. 각 커밋별 개별 테스트만으론 조합 회귀를 놓친다.
+describe("Engine.createForToday — 이월 UX 3종 조합 왕복 안정성", () => {
+  it("굵게 태그 + 구분선 + 카운트 헤더가 다일 왕복에서 일관되게 유지", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      // 어제(2026-09-14) 노트를 실제 라이터가 만들었을 법한 형태로 시드.
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "# 2026-09-14 데일리",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일 (3)",
+        "- [ ] A (**3일째** 이월, 09-11~) (🟠 드롭 예정입니다)",
+        "    - 세부 메모",
+        "",
+        CARRYOVER_SEPARATOR,
+        "",
+        "- [ ] B (**2일째** 이월, 09-12~)",
+        "",
+        CARRYOVER_SEPARATOR,
+        "",
+        "- [ ] C (**1일째** 이월, 09-13~)",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+
+      // 1. 카운트 헤더가 그대로 3개로 유지
+      expect(md).toMatch(/^## ✅ 이월된 할일 \(3\)$/m);
+
+      // 2. 굵게 태그 세 항목 모두 그대로 승격 (일수는 각 +1)
+      expect(md).toContain("- [ ] A (**4일째** 이월, 09-11~)");
+      expect(md).toContain("- [ ] B (**3일째** 이월, 09-12~)");
+      expect(md).toContain("- [ ] C (**2일째** 이월, 09-13~)");
+
+      // 3. A 의 자식 메모가 소실되지 않고 유지
+      expect(md).toContain("    - 세부 메모");
+
+      // 4. 구분선은 블록 3개 사이에 정확히 2개
+      const sepRegex = new RegExp(`^${CARRYOVER_SEPARATOR}$`, "gm");
+      const separatorCount = (md.match(sepRegex) ?? []).length;
+      expect(separatorCount).toBe(2);
+
+      // 5. 자식으로 구분선이 딸려 들어가지 않았는지 (왕복 축적 방지)
+      expect(md).not.toMatch(new RegExp(`- \\[ \\] A[^\\n]*\\n${CARRYOVER_SEPARATOR}`));
+    });
+  });
+
+  it("어제 노트 자식에 사용자가 `---` 를 넣어도 다음날 소실되지 않음", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "# 2026-09-14 데일리",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일 (1)",
+        "- [ ] Meeting (**1일째** 이월, 09-13~)",
+        "    - 요약",
+        "    ---", // 사용자가 자식 안에 손으로 넣은 가로선
+        "    - 결론",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      expect(md).toContain("- [ ] Meeting (**2일째** 이월, 09-13~)");
+      expect(md).toContain("    - 요약");
+      expect(md).toContain("    ---");
+      expect(md).toContain("    - 결론");
+    });
+  });
+
+  it("사용자가 헤더에 코멘트를 붙여도 이월이 오늘 노트로 다 넘어옴", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      const seed = [
+        "---",
+        "date: 2026-09-14",
+        "tags: [daily]",
+        "---",
+        "",
+        "# 2026-09-14 데일리",
+        "",
+        "## 📌 할일",
+        "",
+        "## ✅ 이월된 할일 (2) — 오후에 확인", // 사용자 자유 편집
+        "- [ ] X (**1일째** 이월, 09-13~)",
+        "",
+        CARRYOVER_SEPARATOR,
+        "",
+        "- [ ] Y (**1일째** 이월, 09-13~)",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      vault.seed(dailyNotePath(fromIsoDate("2026-09-14"), settings), seed);
+
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      // 헤더 편집에도 X 와 Y 모두 오늘로 이월됨 (옛 정책이면 헤더 인식 실패로 통째 소실).
+      expect(md).toContain("- [ ] X (**2일째** 이월, 09-13~)");
+      expect(md).toContain("- [ ] Y (**2일째** 이월, 09-13~)");
+      // 오늘 헤더는 canonical form + 새 카운트로 재렌더
+      expect(md).toMatch(/^## ✅ 이월된 할일 \(2\)$/m);
     });
   });
 });

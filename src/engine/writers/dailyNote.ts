@@ -1,4 +1,5 @@
 import {
+  CARRYOVER_SEPARATOR,
   DROP_WARNING_TEXT,
   FOOTER_TEMPLATE,
   SECTION_CARRYOVER_NEW,
@@ -20,12 +21,13 @@ export function renderDailyNote(
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
   const warnOrange = Math.max(1, settings.dropThresholdDays - settings.warnOrangeDaysBeforeDrop);
   const warnRed = Math.max(1, settings.dropThresholdDays - settings.warnRedDaysBeforeDrop);
-  // 블록 사이에 빈 줄 + --- + 빈 줄 을 넣어 이월 항목을 시각적으로 구분한다.
-  // 파서 쪽에서 --- 라인을 자식으로 취급하지 않게 걸러야 재렌더링 시 중복이 안 생긴다.
+  // 블록 사이에 빈 줄 + 구분선 + 빈 줄 을 넣어 이월 항목을 시각적으로 구분한다.
+  // 파서는 이 구분선(정확히 CARRYOVER_SEPARATOR 문자열) 만 자식에서 걸러내므로
+  // 사용자가 하위 메모에 넣은 `---` 등 다른 형태의 구분선은 그대로 보존된다.
   const carryBody = sorted
     .map((b) => renderSingleBlock(b, warnOrange, warnRed))
     .reduce<string[]>((acc, block, i) => {
-      if (i > 0) acc.push("", "---", "");
+      if (i > 0) acc.push("", CARRYOVER_SEPARATOR, "");
       acc.push(...block);
       return acc;
     }, [])

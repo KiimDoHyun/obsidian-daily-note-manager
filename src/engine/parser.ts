@@ -1,10 +1,19 @@
 import {
   CARRYOVER_SECTION_HEADERS,
+  CARRYOVER_SEPARATOR,
   MARKER_ARCHIVE,
   MARKER_LONG,
   SECTION_MEMO,
   TODO_SECTION_HEADERS,
 } from "./constants";
+
+// 알려진 섹션 헤더 목록. 사용자가 헤더 뒤에 카운트나 코멘트를 덧붙여도
+// 이 접두어로 시작하기만 하면 canonical 이름으로 정규화해 이월 항목이 소실되지 않게 한다.
+const KNOWN_SECTION_HEADERS: readonly string[] = [
+  ...TODO_SECTION_HEADERS,
+  ...CARRYOVER_SECTION_HEADERS,
+  SECTION_MEMO,
+];
 import { resolveOriginDate } from "./dateutil";
 import type { DailyNoteParsed, TaskBlock } from "./types";
 import { makeBlock } from "./types";
@@ -39,15 +48,29 @@ function splitSections(lines: string[]): Map<string, string[]> {
   for (const line of lines) {
     const stripped = line.replace(/\s+$/, "");
     if (stripped.startsWith("## ")) {
-      // 이월 섹션은 헤더 끝에 ` (N)` 카운트가 붙는다. 매칭 키에서는 카운트를 떼서
-      // 카운트 유무와 무관하게 pickSection 이 인식하도록 한다.
-      current = stripped.replace(/\s*\(\d+\)$/, "");
+      current = canonicalizeHeader(stripped);
       if (!sections.has(current)) sections.set(current, []);
     } else if (current !== null) {
       sections.get(current)!.push(line);
     }
   }
   return sections;
+}
+
+// 알려진 섹션 이름으로 시작하는 헤더는 canonical 이름으로 정규화한다.
+// 사용자가 헤더 뒤에 카운트 `(3)`, 카운트 뒤 코멘트, 공백을 넣은 카운트 `( 3 )`,
+// 비숫자 카운트 `(three)` 등 무엇을 덧붙여도 이월 항목이 통째로 소실되지 않는다.
+// 알려진 이름과 매칭 안 되면 원문 그대로 반환하여 사용자 정의 섹션은 그대로 보존한다.
+function canonicalizeHeader(headerLine: string): string {
+  for (const known of KNOWN_SECTION_HEADERS) {
+    if (headerLine === known) return known;
+    // 정확히 알려진 이름 뒤에 공백/탭이 있는 경우만 매칭.
+    // `## ✅ 이월된 할일FOO` 처럼 이름에 딱 붙는 다른 문자는 별개 헤더로 취급.
+    if (headerLine.startsWith(known + " ") || headerLine.startsWith(known + "\t")) {
+      return known;
+    }
+  }
+  return headerLine;
 }
 
 function pickSection(sections: Map<string, string[]>, candidates: readonly string[]): string[] {
@@ -73,9 +96,10 @@ function parseBlocks(lines: string[], noteDate: Date, isCarryover: boolean): Tas
       currentChildren = [];
     } else {
       if (current === null) continue;
-      // 이월 섹션의 블록 사이 시각적 구분선(--- 만 있는 라인)은 자식으로 취급하지 않는다.
-      // 재렌더링 시 라이터가 다시 구분선을 삽입하므로, 걸러내지 않으면 블록에 눌러붙어 중복된다.
-      if (isCarryover && raw.trim() === "---") continue;
+      // 이월 섹션의 블록 사이 시각적 구분선(정확히 CARRYOVER_SEPARATOR 인 라인) 만 걸러낸다.
+      // 사용자가 하위 메모에 `---` 나 다른 형태의 가로선을 손으로 넣은 경우는 그대로 보존.
+      // 정확 일치(trim 없음) 로 검사하므로 들여쓴 자식 라인도 영향 없음.
+      if (isCarryover && raw === CARRYOVER_SEPARATOR) continue;
       currentChildren.push(raw);
     }
   }

@@ -13,6 +13,11 @@ export const CARRYOVER_SECTION_HEADERS = [
 export const MARKER_ARCHIVE = "#보관";
 export const MARKER_LONG = "#장기";
 
+// 이월 블록 사이 시각적 구분선. 옵시디언은 3개 이상의 대시를 모두 가로선으로 렌더하므로
+// 사용자 눈에는 일반 `---` 과 동일하지만, 사용자가 실수로 정확히 이 길이의 대시를 손으로
+// 입력할 가능성이 사실상 없어 파서에서 "우리가 넣은 구분선" 만 안전하게 걸러낼 수 있다.
+export const CARRYOVER_SEPARATOR = "-".repeat(17);
+
 export const WARN_ORANGE = "🟠";
 export const WARN_RED = "🔴";
 export const DROP_WARNING_TEXT = "드롭 예정입니다";

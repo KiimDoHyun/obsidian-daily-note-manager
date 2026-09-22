@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { CARRYOVER_SEPARATOR } from "../../src/engine/constants";
 import { fromIsoDate, toIsoDate } from "../../src/engine/dateutil";
 import { parseDailyNoteText } from "../../src/engine/parser";
 import { makeDailyNoteMd, makeLegacyDailyNoteMd } from "../helpers/fixtures";
@@ -36,6 +37,88 @@ describe("parser: section 분리", () => {
     expect(p.carryoverBlocks).toHaveLength(2);
     expect(p.carryoverBlocks[0].topText).toBe("A");
     expect(p.carryoverBlocks[1].topText).toBe("B");
+  });
+
+  it("헤더 뒤에 사용자가 코멘트를 덧붙여도 이월 소실 없이 인식", () => {
+    // 사용자가 헤더를 편집해서 뒤에 자유 텍스트를 붙여도 canonical 이름으로 시작하기만 하면
+    // 이월 섹션으로 인식되어야 한다. 옛 정책은 정규식 매칭이 실패해서 이월이 통째로 소실됐다.
+    const cases = [
+      "## ✅ 이월된 할일 (3) — 확인 필요",
+      "## ✅ 이월된 할일 ( 3 )", // 카운트 안 공백
+      "## ✅ 이월된 할일 (three)", // 비숫자 카운트
+      "## ✅ 이월된 할일 오늘 정리", // 카운트 없이 자유 텍스트
+      "## ✅ 이월된 할일\t(3)", // 탭 구분
+    ];
+    for (const header of cases) {
+      const md = [
+        "---",
+        "date: 2026-09-15",
+        "tags: [daily]",
+        "---",
+        "",
+        "## 📌 할일",
+        "",
+        header,
+        "- [ ] X (**1일째** 이월, 09-14~)",
+        "",
+        "## 💬 메모",
+        "",
+      ].join("\n");
+      const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+      expect(p.carryoverBlocks, `헤더 "${header}" 에서 이월 인식 실패`).toHaveLength(1);
+      expect(p.carryoverBlocks[0].topText).toBe("X");
+    }
+  });
+
+  it("헤더 이름에 딱 붙는 다른 문자는 별개 섹션으로 취급 (오탐 방지)", () => {
+    // canonicalize 는 이름 뒤 공백/탭이 있을 때만 매칭. 이름에 바로 붙은 문자는 다른 헤더.
+    const md = [
+      "---",
+      "date: 2026-09-15",
+      "tags: [daily]",
+      "---",
+      "",
+      "## 📌 할일",
+      "",
+      "## ✅ 이월된 할일FOO", // 이름에 바로 붙음 → 이월 섹션 아님
+      "- [ ] should_not_be_carryover",
+      "",
+      "## 💬 메모",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(0);
+  });
+
+  it("코드블록 안의 `## ✅ 이월된 할일` 은 섹션 헤더로 오탐 (기존 한계, 회귀 감지용)", () => {
+    // splitSections 는 코드펜스 상태를 추적하지 않는다. 코드블록 안의 `## ` 라인도
+    // 실제 섹션 헤더로 인식돼 이월 섹션에 추가된다. Map 은 같은 키에 대해 append 하므로
+    // 실제 이월 + 코드블록 예시가 한 섹션에 섞여 파싱된다.
+    // 이 오탐은 이번 커밋 이전부터 존재하는 한계. 향후 코드펜스 추적을 도입하면
+    // 아래 assertion 을 `toHaveLength(1)` 로 뒤집으면 회귀가 잡힌다.
+    const md = [
+      "---",
+      "date: 2026-09-15",
+      "tags: [daily]",
+      "---",
+      "",
+      "## 📌 할일",
+      "",
+      "## ✅ 이월된 할일",
+      "- [ ] real carry (**1일째** 이월, 09-14~)",
+      "",
+      "## 💬 메모",
+      "```",
+      "## ✅ 이월된 할일",
+      "- [ ] example in code",
+      "```",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    // 코드블록 안 헤더 오탐으로 이월 섹션 배열에 두 블록이 append 됨.
+    expect(p.carryoverBlocks).toHaveLength(2);
+    expect(p.carryoverBlocks[0].topText).toBe("real carry");
+    expect(p.carryoverBlocks[1].topText).toBe("example in code");
   });
 
   it("옛 섹션명(오늘의 목표/미완료 이월)도 하위호환 인식", () => {
@@ -77,16 +160,16 @@ describe("parser: 최상위 라인 매치", () => {
     expect(toIsoDate(p.carryoverBlocks[0].originDate!)).toBe("2026-09-11");
   });
 
-  it("이월 섹션에서 --- 만 있는 라인은 자식으로 삼키지 않는다", () => {
+  it("이월 섹션에서 CARRYOVER_SEPARATOR 정확히 일치하는 라인만 자식으로 삼키지 않는다", () => {
     // 라이터가 블록 사이에 구분선을 넣으므로, 파서가 이를 자식으로 취급하면
-    // 다음날 재렌더링 시 라이터가 또 --- 를 붙여 중복이 누적된다.
+    // 다음날 재렌더링 시 라이터가 또 구분선을 붙여 중복이 누적된다.
     const md = makeDailyNoteMd({
       date: "2026-09-15",
       carryoverLines: [
         "- [ ] A (**2일째** 이월, 09-12~)",
         "    - sub note",
         "",
-        "---",
+        CARRYOVER_SEPARATOR,
         "",
         "- [ ] B (**1일째** 이월, 09-14~)",
       ],
@@ -97,6 +180,32 @@ describe("parser: 최상위 라인 매치", () => {
     expect(p.carryoverBlocks[0].children).toEqual(["    - sub note"]);
     expect(p.carryoverBlocks[1].topText).toBe("B");
     expect(p.carryoverBlocks[1].children).toEqual([]);
+  });
+
+  it("사용자가 자식에 넣은 `---` 는 보존된다 (CARRYOVER_SEPARATOR 정확 일치가 아님)", () => {
+    // 이전 정책은 이월 섹션의 모든 `---` 을 자식에서 삼켰다.
+    // 새 정책은 라이터가 실제로 삽입한 구분선(정확히 CARRYOVER_SEPARATOR) 만 걸러
+    // 사용자가 하위 메모에 손으로 넣은 가로선은 그대로 보존한다.
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      carryoverLines: [
+        "- [ ] A (**2일째** 이월, 09-12~)",
+        "    - 회의록 요약",
+        "    ---",
+        "    - 결론",
+        "---",
+        "    - 후속 조치",
+      ],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(1);
+    expect(p.carryoverBlocks[0].children).toEqual([
+      "    - 회의록 요약",
+      "    ---",
+      "    - 결론",
+      "---",
+      "    - 후속 조치",
+    ]);
   });
 
   it("이월 태그 굵게(**N일째**) 새 포맷과 옛 포맷 모두 파싱", () => {
