@@ -90,9 +90,9 @@ describe("parser: section 분리", () => {
     expect(p.carryoverBlocks).toHaveLength(0);
   });
 
-  it("코드블록(```) 안의 `## ` 라인은 섹션 헤더로 오탐하지 않는다", () => {
-    // splitSections 는 코드펜스 상태를 추적한다. 코드블록 안의 `## ` 라인은
-    // 실제 마크다운 헤더가 아니라 예시 텍스트이므로 섹션 경계로 취급하지 않는다.
+  it("코드블록 안의 canonical 이 아닌 `## ` 라인은 섹션 헤더로 오탐하지 않는다", () => {
+    // 사용자가 자기 노트에 임의 헤더 이름을 코드블록으로 문서화하는 케이스.
+    // 알려진 canonical 이름이 아니므로 코드펜스 안에서 섹션 경계로 취급되지 않아야 한다.
     const md = [
       "---",
       "date: 2026-09-15",
@@ -106,18 +106,18 @@ describe("parser: section 분리", () => {
       "",
       "## 💬 메모",
       "```",
-      "## ✅ 이월된 할일",
+      "## 다른 헤더 예시",
       "- [ ] example in code",
       "```",
       "",
     ].join("\n");
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
-    // 코드펜스 인식으로 진짜 이월 항목만 인식됨.
+    // 코드펜스 안 헤더는 canonical 아니라 인식 안 됨. 진짜 이월 항목만.
     expect(p.carryoverBlocks).toHaveLength(1);
     expect(p.carryoverBlocks[0].topText).toBe("real carry");
   });
 
-  it("코드블록(~~~) 안의 `## ` 라인도 오탐 방지", () => {
+  it("코드블록(~~~) 안의 canonical 아닌 `## ` 라인도 오탐 방지", () => {
     const md = [
       "---",
       "date: 2026-09-15",
@@ -131,7 +131,7 @@ describe("parser: section 분리", () => {
       "",
       "## 💬 메모",
       "~~~",
-      "## ✅ 이월된 할일",
+      "## 다른 헤더 예시",
       "- [ ] example in tilde code",
       "~~~",
       "",
@@ -139,6 +139,92 @@ describe("parser: section 분리", () => {
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
     expect(p.carryoverBlocks).toHaveLength(1);
     expect(p.carryoverBlocks[0].topText).toBe("real carry");
+  });
+
+  it("코드블록 안에 canonical 헤더 이름이 있으면 실제 헤더로 인정 (미닫힌 fence 방어의 부산물)", () => {
+    // 트레이드오프: 알려진 헤더 이름은 fence 안에서도 실제 헤더로 인정한다.
+    // 사용자가 이 플러그인의 헤더 이름을 정확히 코드블록에 넣어 문서화하는 것은 드물고,
+    // 대신 미닫힌 fence 로 인한 이월 소실을 방어하는 게 훨씬 중요.
+    const md = [
+      "---", "date: 2026-09-15", "tags: [daily]", "---",
+      "",
+      "## 📌 할일",
+      "",
+      "## ✅ 이월된 할일",
+      "- [ ] real carry (⏰ 1일째 이월, 09-14~)",
+      "",
+      "## 💬 메모",
+      "```",
+      "## ✅ 이월된 할일", // 정확히 canonical → 실제 헤더로 인정됨
+      "- [ ] appears as carry",
+      "```",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(2);
+    expect(p.carryoverBlocks.map(b => b.topText)).toEqual(["real carry", "appears as carry"]);
+  });
+
+  it("미닫힌 fence 뒤 이월 섹션 헤더가 여전히 인식된다 (데이터 손실 방어)", () => {
+    // 실제 사용자 시나리오: 메모 섹션에서 코드펜스를 열고 닫는 걸 잊음.
+    // 옛 fence 추적 방식이면 이후 모든 헤더가 fence 안으로 취급돼 이월이 통째 소실.
+    // 새 방식은 canonical 이름 매칭 라인에서 fence 상태를 리셋해 이월을 살린다.
+    const md = [
+      "---", "date: 2026-09-14", "tags: [daily]", "---",
+      "",
+      "## 📌 할일",
+      "```", // <- 여기서 fence 열고 닫지 않음
+      "예시 코드",
+      "",
+      "## ✅ 이월된 할일",
+      "- [ ] 어제 이월 (⏰ 1일째 이월, 09-13~)",
+      "",
+      "## 💬 메모",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-14"));
+    expect(p.carryoverBlocks).toHaveLength(1);
+    expect(p.carryoverBlocks[0].topText).toBe("어제 이월");
+  });
+
+  it("헤더에 공백 없이 카운트가 붙어도 이월 인식 (`## ✅ 이월된 할일(3)`)", () => {
+    // 사용자가 옛 스타일 흉내내며 공백을 빠뜨림. 옛 canonicalize 는 공백/탭만 허용해
+    // 헤더 인식 실패로 이월이 통째 소실됐다. 새 방식은 이름 뒤 구두점도 허용.
+    const md = [
+      "---", "date: 2026-09-14", "tags: [daily]", "---",
+      "",
+      "## 📌 할일",
+      "",
+      "## ✅ 이월된 할일(3)", // 공백 없음
+      "- [ ] X (⏰ 1일째 이월, 09-13~)",
+      "",
+      "## 💬 메모",
+      "",
+    ].join("\n");
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-14"));
+    expect(p.carryoverBlocks).toHaveLength(1);
+    expect(p.carryoverBlocks[0].topText).toBe("X");
+  });
+
+  it("헤더 이름 바로 뒤 구두점 다양한 형태 모두 인식", () => {
+    // 카운트가 붙는 여러 편집 패턴을 폭넓게 허용.
+    const cases = [
+      "## ✅ 이월된 할일(3)",
+      "## ✅ 이월된 할일[3]",
+      "## ✅ 이월된 할일-확인",
+      "## ✅ 이월된 할일:주의",
+      "## ✅ 이월된 할일•메모",
+    ];
+    for (const header of cases) {
+      const md = [
+        "---", "date: 2026-09-14", "tags: [daily]", "---",
+        "", "## 📌 할일", "", header,
+        "- [ ] X (⏰ 1일째 이월, 09-13~)",
+        "", "## 💬 메모", "",
+      ].join("\n");
+      const p = parseDailyNoteText(md, fromIsoDate("2026-09-14"));
+      expect(p.carryoverBlocks, `헤더 "${header}" 에서 이월 인식 실패`).toHaveLength(1);
+    }
   });
 
   it("옛 섹션명(오늘의 목표/미완료 이월)도 하위호환 인식", () => {

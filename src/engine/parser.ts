@@ -65,28 +65,38 @@ function splitSections(lines: string[]): Map<string, string[]> {
       if (current !== null) sections.get(current)!.push(line);
       continue;
     }
-    if (openFence === null && stripped.startsWith("## ")) {
-      current = canonicalizeHeader(stripped);
-      if (!sections.has(current)) sections.set(current, []);
-    } else if (current !== null) {
-      sections.get(current)!.push(line);
+    if (stripped.startsWith("## ")) {
+      const canonical = canonicalizeHeader(stripped);
+      const isKnown = KNOWN_SECTION_HEADERS.includes(canonical);
+      // 알려진 canonical 헤더(할일·이월·메모) 는 코드펜스 안에서도 실제 헤더로 인정한다.
+      // 사용자가 fence 를 실수로 열고 닫지 않아도 이월 섹션이 소실되지 않도록 방어.
+      // 사이드이펙트: 사용자가 코드블록으로 이 플러그인의 헤더 이름을 문서화하면 그것도
+      // 헤더로 오인하지만, 미닫힌 fence 로 인한 데이터 손실보다 사소한 트레이드오프.
+      if (isKnown || openFence === null) {
+        if (isKnown && openFence !== null) openFence = null; // 미닫힌 fence 리셋
+        current = canonical;
+        if (!sections.has(current)) sections.set(current, []);
+        continue;
+      }
     }
+    if (current !== null) sections.get(current)!.push(line);
   }
   return sections;
 }
 
 // 알려진 섹션 이름으로 시작하는 헤더는 canonical 이름으로 정규화한다.
 // 사용자가 헤더 뒤에 카운트 `(3)`, 카운트 뒤 코멘트, 공백을 넣은 카운트 `( 3 )`,
-// 비숫자 카운트 `(three)` 등 무엇을 덧붙여도 이월 항목이 통째로 소실되지 않는다.
-// 알려진 이름과 매칭 안 되면 원문 그대로 반환하여 사용자 정의 섹션은 그대로 보존한다.
+// 비숫자 카운트 `(three)`, 공백 없이 붙은 카운트 `(3)` 등 무엇을 덧붙여도 이월 항목이
+// 통째로 소실되지 않는다. 알려진 이름과 매칭 안 되면 원문 그대로 반환하여 사용자
+// 정의 섹션은 그대로 보존한다.
 function canonicalizeHeader(headerLine: string): string {
   for (const known of KNOWN_SECTION_HEADERS) {
     if (headerLine === known) return known;
-    // 정확히 알려진 이름 뒤에 공백/탭이 있는 경우만 매칭.
-    // `## ✅ 이월된 할일FOO` 처럼 이름에 딱 붙는 다른 문자는 별개 헤더로 취급.
-    if (headerLine.startsWith(known + " ") || headerLine.startsWith(known + "\t")) {
-      return known;
-    }
+    if (!headerLine.startsWith(known)) continue;
+    const rest = headerLine.slice(known.length);
+    // 이름 바로 뒤 문자가 글자/숫자면 별개 헤더로 취급 (예: `## ✅ 이월된 할일FOO`).
+    // 공백·구두점(괄호, 대괄호, 대시 등) 이 오면 canonical 로 정규화하여 사용자 편집에 관대.
+    if (!/^[\p{L}\p{N}]/u.test(rest)) return known;
   }
   return headerLine;
 }
