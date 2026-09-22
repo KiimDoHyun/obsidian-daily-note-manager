@@ -20,9 +20,15 @@ export function renderDailyNote(
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
   const warnOrange = Math.max(1, settings.dropThresholdDays - settings.warnOrangeDaysBeforeDrop);
   const warnRed = Math.max(1, settings.dropThresholdDays - settings.warnRedDaysBeforeDrop);
+  // 블록 사이에 빈 줄 + --- + 빈 줄 을 넣어 이월 항목을 시각적으로 구분한다.
+  // 파서 쪽에서 --- 라인을 자식으로 취급하지 않게 걸러야 재렌더링 시 중복이 안 생긴다.
   const carryBody = sorted
     .map((b) => renderSingleBlock(b, warnOrange, warnRed))
-    .flat()
+    .reduce<string[]>((acc, block, i) => {
+      if (i > 0) acc.push("", "---", "");
+      acc.push(...block);
+      return acc;
+    }, [])
     .join("\n");
   const footer = FOOTER_TEMPLATE.replace("{summary_link}", monthlySummaryWikilink(today, settings))
     .replace("{drop_link}", monthlyDropWikilink(today, settings));

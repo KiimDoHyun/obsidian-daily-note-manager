@@ -316,6 +316,80 @@ describe("Engine.createForToday — 시나리오", () => {
   });
 });
 
+// 이월 항목이 여러 개면 서로 시각적으로 잘 안 구분됨. 라이터가 블록 사이에 --- 구분선을
+// 넣고, 파서는 그 구분선을 삼켜서 재렌더링 시 중복이 안 생기도록 한다. 이 두 가지가
+// 함께 성립해야 사용자 경험이 유지됨.
+describe("Engine.createForToday — 이월 블록 사이 구분선", () => {
+  it("이월 항목이 여러 개일 때 블록 사이에 --- 삽입, 처음·끝에는 없음", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-14"), settings),
+        makeDailyNoteMd({
+          date: "2026-09-14",
+          activeLines: ["- [ ] A", "- [ ] B", "- [ ] C"],
+        }),
+      );
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      // A/B/C 사이에 --- 두 번 (블록 3개 → 사이 2개)
+      const separatorCount = (md.match(/^---$/gm) ?? []).length;
+      // 노트 최상단 frontmatter 의 --- 2개 + 푸터 --- 1개 + 이월 블록 사이 2개 = 5개
+      expect(separatorCount).toBe(5);
+      // 순서: A(가장 오래됨은 없고 모두 1일째) 는 원문 순서 유지. 각 블록 사이 구분 확인.
+      expect(md).toMatch(
+        /- \[ \] A \(\*\*1일째\*\*[^\n]*\n\n---\n\n- \[ \] B \(\*\*1일째\*\*[^\n]*\n\n---\n\n- \[ \] C \(\*\*1일째\*\*/,
+      );
+    });
+  });
+
+  it("이월 항목이 1개일 때는 구분선 없음", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-14"), settings),
+        makeDailyNoteMd({ date: "2026-09-14", activeLines: ["- [ ] Only one"] }),
+      );
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      // frontmatter 2개 + 푸터 1개 = 3개. 이월 섹션 내부에는 없음.
+      const separatorCount = (md.match(/^---$/gm) ?? []).length;
+      expect(separatorCount).toBe(3);
+    });
+  });
+
+  it("어제 노트가 이미 --- 를 포함해도 오늘 재렌더링 시 중복되지 않음", async () => {
+    const vault = new InMemoryVault();
+    await withFixedToday("2026-09-15", async () => {
+      const { engine, settings } = makeEngine(vault);
+      // 어제 노트가 이미 구분선을 가진 상태 (그저께 이 플러그인이 렌더링한 결과)
+      vault.seed(
+        dailyNotePath(fromIsoDate("2026-09-14"), settings),
+        makeDailyNoteMd({
+          date: "2026-09-14",
+          activeLines: [],
+          carryoverLines: [
+            "- [ ] A (**2일째** 이월, 09-12~)",
+            "",
+            "---",
+            "",
+            "- [ ] B (**1일째** 이월, 09-13~)",
+          ],
+        }),
+      );
+      await engine.createForToday();
+      const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
+      // 이월 블록 사이 --- 는 여전히 정확히 1개. 파서가 어제 것을 삼키고 라이터가 새로 넣음.
+      const separatorCount = (md.match(/^---$/gm) ?? []).length;
+      expect(separatorCount).toBe(3 + 1); // frontmatter 2 + 푸터 1 + 이월 블록 2개 사이 1개
+      // A 의 자식으로 --- 가 딸려 들어가지 않았는지 확인
+      expect(md).not.toMatch(/- \[ \] A[^\n]*\n---/);
+    });
+  });
+});
+
 describe("Engine.forceDate", () => {
   it("기존 노트 지우고 재생성", async () => {
     const vault = new InMemoryVault();

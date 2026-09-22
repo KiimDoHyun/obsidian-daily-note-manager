@@ -71,6 +71,9 @@ function parseBlocks(lines: string[], noteDate: Date, isCarryover: boolean): Tas
       currentChildren = [];
     } else {
       if (current === null) continue;
+      // 이월 섹션의 블록 사이 시각적 구분선(--- 만 있는 라인)은 자식으로 취급하지 않는다.
+      // 재렌더링 시 라이터가 다시 구분선을 삽입하므로, 걸러내지 않으면 블록에 눌러붙어 중복된다.
+      if (isCarryover && raw.trim() === "---") continue;
       currentChildren.push(raw);
     }
   }

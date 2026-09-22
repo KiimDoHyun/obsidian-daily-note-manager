@@ -50,6 +50,28 @@ describe("parser: 최상위 라인 매치", () => {
     expect(toIsoDate(p.carryoverBlocks[0].originDate!)).toBe("2026-09-11");
   });
 
+  it("이월 섹션에서 --- 만 있는 라인은 자식으로 삼키지 않는다", () => {
+    // 라이터가 블록 사이에 구분선을 넣으므로, 파서가 이를 자식으로 취급하면
+    // 다음날 재렌더링 시 라이터가 또 --- 를 붙여 중복이 누적된다.
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      carryoverLines: [
+        "- [ ] A (**2일째** 이월, 09-12~)",
+        "    - sub note",
+        "",
+        "---",
+        "",
+        "- [ ] B (**1일째** 이월, 09-14~)",
+      ],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.carryoverBlocks).toHaveLength(2);
+    expect(p.carryoverBlocks[0].topText).toBe("A");
+    expect(p.carryoverBlocks[0].children).toEqual(["    - sub note"]);
+    expect(p.carryoverBlocks[1].topText).toBe("B");
+    expect(p.carryoverBlocks[1].children).toEqual([]);
+  });
+
   it("이월 태그 굵게(**N일째**) 새 포맷과 옛 포맷 모두 파싱", () => {
     const md = makeDailyNoteMd({
       date: "2026-09-15",
