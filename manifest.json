@@ -1,7 +1,7 @@
 {
   "id": "daily-note-manager",
   "name": "Daily Note Manager",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "minAppVersion": "1.7.2",
   "description": "Automate daily note carryover, aging warnings, drop, archive, monthly summary, and timeline visualization.",
   "author": "KiimDoHyun",

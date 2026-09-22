@@ -15,7 +15,7 @@ export const MARKER_LONG = "#장기";
 
 export const WARN_ORANGE = "🟠";
 export const WARN_RED = "🔴";
-export const DROP_WARNING_SUFFIX = "(드롭 예정입니다)";
+export const DROP_WARNING_TEXT = "드롭 예정입니다";
 
 export const DROP_THRESHOLD_DAYS = 5;
 export const WARN_ORANGE_DAY = 3;

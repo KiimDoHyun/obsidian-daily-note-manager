@@ -111,6 +111,79 @@ describe("Scheduler.tick — 하루 한 번 게이트", () => {
   });
 });
 
+describe("Scheduler.tick — 열린 편집기 flush", () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it("engine.createForToday 전에 열린 마크다운 뷰의 save 를 호출한다", async () => {
+    await withFixedDate("2026-09-15", async () => {
+      const order: string[] = [];
+      const save = vi.fn().mockImplementation(async () => {
+        order.push("save");
+      });
+      const create = vi.fn().mockImplementation(async () => {
+        order.push("create");
+        return { status: "created" };
+      });
+      const engine = { createForToday: create } as unknown as Engine;
+      const plugin = {
+        registerInterval: () => {},
+        app: {
+          workspace: {
+            getLeavesOfType: (t: string) =>
+              t === "markdown" ? [{ view: { save } }] : [],
+          },
+        },
+      } as unknown as Plugin;
+
+      const scheduler = new Scheduler(engine, plugin);
+      await tick(scheduler);
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(order).toEqual(["save", "create"]);
+    });
+  });
+
+  it("save 가 던져도 tick 은 계속 진행", async () => {
+    await withFixedDate("2026-09-15", async () => {
+      const save = vi.fn().mockRejectedValue(new Error("boom"));
+      const create = vi.fn().mockResolvedValue({ status: "created" });
+      const engine = { createForToday: create } as unknown as Engine;
+      const plugin = {
+        registerInterval: () => {},
+        app: {
+          workspace: {
+            getLeavesOfType: () => [{ view: { save } }],
+          },
+        },
+      } as unknown as Plugin;
+
+      const scheduler = new Scheduler(engine, plugin);
+      await tick(scheduler);
+
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("plugin.app 이 없어도 조용히 스킵", async () => {
+    await withFixedDate("2026-09-15", async () => {
+      const create = vi.fn().mockResolvedValue({ status: "created" });
+      const engine = { createForToday: create } as unknown as Engine;
+      const scheduler = new Scheduler(engine, mockPlugin());
+
+      await tick(scheduler);
+
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
 describe("Scheduler.start — 초기 tick 즉시 실행 + 인터벌 등록", () => {
   it("start() 는 즉시 첫 tick 을 발동하고 setInterval 을 plugin.registerInterval 로 넘김", async () => {
     // window.setInterval / plugin.registerInterval 을 스파이로 관찰.

@@ -96,7 +96,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const md = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(md).toMatch(/🟠 - \[ \] SNMP 개선 \(3일째 이월, 09-10~\) \(드롭 예정입니다\)/);
+      expect(md).toMatch(/^- \[ \] SNMP 개선 \(3일째 이월, 09-10~\) \(🟠 드롭 예정입니다\)$/m);
     });
   });
 

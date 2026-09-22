@@ -50,12 +50,16 @@ describe("parser: 최상위 라인 매치", () => {
     expect(toIsoDate(p.carryoverBlocks[0].originDate!)).toBe("2026-09-11");
   });
 
-  it("경고 prefix (🟠/🔴) + drop 예정 suffix 도 인식", () => {
+  it("경고 이모지가 라인 맨 앞(옛 포맷)이든 괄호 안(새 포맷)이든 모두 인식", () => {
     const md = makeDailyNoteMd({
       date: "2026-09-15",
       carryoverLines: [
+        // 옛 포맷: 이모지가 라인 맨 앞 + 접미부 이모지 없음
         "🟠 - [ ] Y (3일째 이월, 09-11~) (드롭 예정입니다)",
         "🔴 - [ ] Z (4일째 이월, 09-10~) (드롭 예정입니다)",
+        // 새 포맷: 이모지가 접미부 괄호 안
+        "- [ ] Y2 (3일째 이월, 09-11~) (🟠 드롭 예정입니다)",
+        "- [ ] Z2 (4일째 이월, 09-10~) (🔴 드롭 예정입니다)",
       ],
     });
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
@@ -63,6 +67,10 @@ describe("parser: 최상위 라인 매치", () => {
     expect(p.carryoverBlocks[0].carryoverDays).toBe(3);
     expect(p.carryoverBlocks[1].topText).toBe("Z");
     expect(p.carryoverBlocks[1].carryoverDays).toBe(4);
+    expect(p.carryoverBlocks[2].topText).toBe("Y2");
+    expect(p.carryoverBlocks[2].carryoverDays).toBe(3);
+    expect(p.carryoverBlocks[3].topText).toBe("Z2");
+    expect(p.carryoverBlocks[3].carryoverDays).toBe(4);
   });
 });
 
