@@ -118,9 +118,24 @@ export default class DailyNoteManagerPlugin extends Plugin {
     await super.saveData(data);
     if (validation.fixed) {
       new Notice(formatThresholdResetNotice(this.settings, validation.resetDrop));
-      if (this.settingTab?.containerEl) this.settingTab.display();
+      this.refreshSettingTab();
     }
     if (this.engine) this.rerenderOpenTimelineViews();
+  }
+
+  /**
+   * 자동 보정 후 열려 있는 설정 화면을 갱신한다.
+   * 1.13+ 는 선언형 API 의 `update()` 로 재빌드하고, 그 이전 버전은 구형 `display()` 로 폴백한다.
+   */
+  private refreshSettingTab(): void {
+    const tab = this.settingTab;
+    if (!tab?.containerEl) return;
+    const maybeUpdate = (tab as unknown as { update?: () => void }).update;
+    if (typeof maybeUpdate === "function") {
+      maybeUpdate.call(tab);
+      return;
+    }
+    tab.display();
   }
 
   async activateTimelineView(): Promise<void> {

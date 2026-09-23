@@ -291,12 +291,7 @@ export class Engine {
 
   private async tryDrainQueue(): Promise<void> {
     try {
-      const res = await drainQueue(this.vault, this.settings);
-      if (res.drained > 0 || res.remaining > 0) {
-        console.log(
-          `[daily-note] 대기열 처리: ${res.drained}건 완료, ${res.remaining}건 남음`,
-        );
-      }
+      await drainQueue(this.vault, this.settings);
     } catch (err) {
       console.error("[daily-note] 대기열 처리 중 오류", err);
     }
