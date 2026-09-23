@@ -119,20 +119,20 @@ describe("plugin.saveData — 무효 조합 저장 시 자동 정정", () => {
   });
 
   it("정정이 발생하면 열려 있는 설정 탭을 재렌더한다", async () => {
-    const displaySpy = vi.fn();
-    const tab = { containerEl: {} as HTMLElement, display: displaySpy } as unknown as DailyNoteSettingTab;
+    const updateSpy = vi.fn();
+    const tab = { containerEl: {} as HTMLElement, update: updateSpy } as unknown as DailyNoteSettingTab;
     plugin.settingTab = tab;
     plugin.settings.warnRedDaysBeforeDrop = 4; // 무효
     await plugin.saveData(plugin.settings);
-    expect(displaySpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
   });
 
   it("정정이 없으면 설정 탭 재렌더도 없다", async () => {
-    const displaySpy = vi.fn();
-    const tab = { containerEl: {} as HTMLElement, display: displaySpy } as unknown as DailyNoteSettingTab;
+    const updateSpy = vi.fn();
+    const tab = { containerEl: {} as HTMLElement, update: updateSpy } as unknown as DailyNoteSettingTab;
     plugin.settingTab = tab;
     await plugin.saveData(plugin.settings); // 기본값 그대로 → 유효
-    expect(displaySpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });
 

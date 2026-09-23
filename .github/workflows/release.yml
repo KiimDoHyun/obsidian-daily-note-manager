@@ -43,11 +43,33 @@ jobs:
             main.js
             styles.css
 
-      - name: Create GitHub release
+      - name: Verify release assets exist locally
+        run: |
+          set -e
+          for f in main.js manifest.json styles.css; do
+            if [ ! -s "$f" ]; then
+              echo "missing or empty asset: $f" >&2
+              exit 1
+            fi
+          done
+          ls -la main.js manifest.json styles.css
+
+      - name: Create or reuse GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            main.js manifest.json styles.css
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — will only upload assets"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            main.js manifest.json styles.css \
+            --clobber

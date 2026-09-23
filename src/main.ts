@@ -125,17 +125,14 @@ export default class DailyNoteManagerPlugin extends Plugin {
 
   /**
    * 자동 보정 후 열려 있는 설정 화면을 갱신한다.
-   * 1.13+ 는 선언형 API 의 `update()` 로 재빌드하고, 그 이전 버전은 구형 `display()` 로 폴백한다.
+   * 1.13+ 의 선언형 재빌드 API 만 사용한다. 이전 버전에서는 화면은 그대로지만
+   * Notice 로 정정 사실을 알리고, 사용자가 설정을 다시 열면 정정값을 볼 수 있다.
    */
   private refreshSettingTab(): void {
     const tab = this.settingTab;
     if (!tab?.containerEl) return;
     const maybeUpdate = (tab as unknown as { update?: () => void }).update;
-    if (typeof maybeUpdate === "function") {
-      maybeUpdate.call(tab);
-      return;
-    }
-    tab.display();
+    if (typeof maybeUpdate === "function") maybeUpdate.call(tab);
   }
 
   async activateTimelineView(): Promise<void> {
