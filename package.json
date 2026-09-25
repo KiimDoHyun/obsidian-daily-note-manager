@@ -1,6 +1,6 @@
 {
   "name": "obsidian-daily-note-manager",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "옵시디언 데일리 노트 이월/경고/드롭/보관/월간 종합 자동화",
   "main": "main.js",
   "scripts": {
