@@ -55,24 +55,7 @@ export function registerCommands(plugin: DailyNoteManagerPlugin) {
     },
   });
 
-  plugin.addCommand({
-    id: "refresh-timeline",
-    name: t("cmdRefreshTimeline", locale),
-    callback: async () => {
-      const lc = resolveLocale(plugin.settings.language);
-      const now = new Date();
-      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      try {
-        await plugin.engine.refreshTimelineInSummary(ym);
-        new Notice(t("noticeTimelineRefreshed", lc, { ym }));
-      } catch (err) {
-        console.error("[daily-note] timeline failed", err);
-        new Notice(t("noticeTimelineFailed", lc, { msg: (err as Error).message }));
-      }
-    },
-  });
-
-  plugin.addCommand({
+plugin.addCommand({
     id: "force-date",
     name: t("cmdForceDate", locale),
     callback: async () => {

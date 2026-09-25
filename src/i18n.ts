@@ -58,11 +58,7 @@ const M = {
     en: "Dry-run: preview actions without writing",
   },
   cmdRecompute: { ko: "이번 달 종합 재계산", en: "Recompute this month's summary" },
-  cmdRefreshTimeline: {
-    ko: "이번 달 타임라인 새로고침 (종합 문서 내부)",
-    en: "Refresh this month's timeline (in summary)",
-  },
-  cmdForceDate: {
+cmdForceDate: {
     ko: "특정 날짜 노트 강제 재생성",
     en: "Force regenerate a specific date",
   },
@@ -105,15 +101,7 @@ const M = {
     ko: "재계산 실패: {msg}",
     en: "Recompute failed: {msg}",
   },
-  noticeTimelineRefreshed: {
-    ko: "{ym} 종합 문서의 타임라인 갱신 완료",
-    en: "Timeline refreshed in {ym} summary",
-  },
-  noticeTimelineFailed: {
-    ko: "타임라인 갱신 실패: {msg}",
-    en: "Timeline refresh failed: {msg}",
-  },
-  noticeForceFailed: {
+noticeForceFailed: {
     ko: "강제 생성 실패: {msg}",
     en: "Force regenerate failed: {msg}",
   },

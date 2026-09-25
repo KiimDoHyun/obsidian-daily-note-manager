@@ -22,7 +22,7 @@ import {
   recomputeHeader,
 } from "./writers/monthlySummary";
 import { drainQueue, enqueue, type PendingEntry } from "./writers/pendingQueue";
-import { upsertTimelineSection } from "./writers/timeline";
+import { stripTimelineSection } from "./writers/timeline";
 
 export type RunStatus =
   | "created"
@@ -122,11 +122,6 @@ export class Engine {
     const monthDate = new Date(y, m - 1, 1);
     const path = await ensureSummary(monthDate, this.vault, this.settings);
     await recomputeHeader(path, this.vault);
-  }
-
-  async refreshTimelineInSummary(yearMonth: string): Promise<void> {
-    const [y, m] = yearMonth.split("-").map((n) => parseInt(n, 10));
-    await upsertTimelineSection(new Date(y, m - 1, 1), this.vault, this.settings);
   }
 
   async doctor(): Promise<DoctorReport> {
@@ -262,9 +257,9 @@ export class Engine {
       console.error("[daily-note] 이번 달 종합 헤더 재계산 실패", err);
     }
     try {
-      await upsertTimelineSection(today, this.vault, this.settings);
+      await stripTimelineSection(today, this.vault, this.settings);
     } catch (err) {
-      console.error("[daily-note] 이번 달 타임라인 갱신 실패", err);
+      console.error("[daily-note] 이번 달 종합 문서 타임라인 섹션 정리 실패", err);
     }
     if (!sameYearMonth(today, effectivePrevDate!) && prevSummaryPath !== null) {
       try {
@@ -273,9 +268,9 @@ export class Engine {
         console.error("[daily-note] 이전 달 종합 헤더 재계산 실패", err);
       }
       try {
-        await upsertTimelineSection(effectivePrevDate!, this.vault, this.settings);
+        await stripTimelineSection(effectivePrevDate!, this.vault, this.settings);
       } catch (err) {
-        console.error("[daily-note] 이전 달 타임라인 갱신 실패", err);
+        console.error("[daily-note] 이전 달 종합 문서 타임라인 섹션 정리 실패", err);
       }
     }
 

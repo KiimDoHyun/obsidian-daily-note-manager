@@ -1,4 +1,4 @@
-import { addDays, sameYearMonth, toIsoDate, today as todayDate, ymOf } from "../dateutil";
+import { sameYearMonth, today as todayDate } from "../dateutil";
 import { parseDailyNoteText } from "../parser";
 import { dailyNotePath, monthlySummaryPath } from "../paths";
 import type { DailyNoteSettings } from "../../settings";
@@ -31,22 +31,19 @@ const SUMMARY_DROPPED_HEADER = "### ⏭️ 드롭";
 const TIMELINE_SECTION_HEADER = "## 📊 타임라인";
 
 /**
- * 월간 종합 문서에 `## 📊 타임라인` 섹션을 upsert.
- * 이 섹션이 이미 있으면 다음 `## ` 헤더 직전까지 통째로 교체, 없으면
- * `## 📈 이번 달 요약` 블록 다음(첫 `## N주차` 직전)에 새로 삽입.
+ * 과거 버전이 월간 종합 문서에 삽입해두었던 `## 📊 타임라인` 섹션을 제거.
+ * 타임라인은 이제 전용 뷰에서만 시각화한다.
  */
-export async function upsertTimelineSection(
+export async function stripTimelineSection(
   month: Date,
   vault: VaultLike,
   settings: DailyNoteSettings,
 ): Promise<void> {
   const summaryP = monthlySummaryPath(month, settings);
   if (!vault.exists(summaryP)) return;
-
-  const items = await collectTimelineItems(month, vault, settings);
   const raw = await vault.read(summaryP);
-  const next = replaceOrInsertTimeline(raw, renderTimelineBlock(month, items));
-  await vault.write(summaryP, next);
+  const next = removeTimelineSection(raw);
+  if (next !== raw) await vault.write(summaryP, next);
 }
 
 export async function collectTimelineItems(
@@ -127,77 +124,23 @@ async function attachChildrenFromEventNote(
   }
 }
 
-function replaceOrInsertTimeline(raw: string, block: string[]): string {
+function removeTimelineSection(raw: string): string {
   const lines = raw.split(/\r?\n/);
   const out: string[] = [];
   let i = 0;
   const n = lines.length;
-  let inserted = false;
-
-  // 이미 있으면 교체
   while (i < n) {
     if (lines[i] === TIMELINE_SECTION_HEADER) {
-      out.push(...block);
       i++;
       while (i < n && !lines[i].startsWith("## ")) i++;
-      inserted = true;
+      while (out.length > 0 && out[out.length - 1] === "") out.pop();
+      if (i < n) out.push("");
       continue;
     }
     out.push(lines[i]);
     i++;
   }
-  if (inserted) return out.join("\n");
-
-  // 없으면 첫 `## N주차` 직전에 삽입
-  const inserted2: string[] = [];
-  let done = false;
-  for (const line of out) {
-    if (!done && /^## \d+주차 /.test(line)) {
-      inserted2.push(...block);
-      done = true;
-    }
-    inserted2.push(line);
-  }
-  if (!done) inserted2.push("", ...block);
-  return inserted2.join("\n");
-}
-
-function renderTimelineBlock(month: Date, items: TimelineItem[]): string[] {
-  const done = items.filter((i) => i.section === "완료");
-  const active = items.filter((i) => i.section === "진행중");
-  const crit = items.filter((i) => i.section === "드롭");
-  const ym = ymOf(month);
-
-  const block: string[] = [
-    TIMELINE_SECTION_HEADER,
-    `> 완료 ${done.length} · 진행중 ${active.length} · 드롭 ${crit.length}`,
-    "",
-  ];
-
-  if (items.length === 0) {
-    block.push("_이번 달 이벤트 없음._", "");
-    return block;
-  }
-
-  block.push("```mermaid", "gantt", `    title ${ym} 업무 타임라인`);
-  block.push("    dateFormat YYYY-MM-DD");
-  block.push("    axisFormat %m-%d");
-  block.push("    excludes weekends");
-  block.push("");
-
-  const emit = (title: string, list: TimelineItem[]) => {
-    if (list.length === 0) return;
-    block.push(`    section ${title}`);
-    for (const item of list) {
-      block.push(`    ${sanitizeName(item.name)} :${item.status}, ${formatRange(item)}`);
-    }
-    block.push("");
-  };
-  emit("진행중", active);
-  emit("완료", done);
-  emit("드롭", crit);
-  block.push("```", "");
-  return block;
+  return out.join("\n");
 }
 
 function extractFromSummary(text: string, year: number): TimelineItem[] {
@@ -259,17 +202,4 @@ function parseDroppedLine(line: string, year: number): TimelineItem | null {
     return { name: noOrigin[3], section: "드롭", status: "crit", start: end, end, children: [], hasLongMarker: false };
   }
   return null;
-}
-
-/** Mermaid Gantt 태스크명에서 특수문자 제거 (: , # 는 문법 충돌) */
-function sanitizeName(name: string): string {
-  return name.replace(/[:,#]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
-}
-
-function formatRange(item: TimelineItem): string {
-  const s = toIsoDate(item.start);
-  if (item.start.getTime() === item.end.getTime()) return `${s}, 1d`;
-  // Mermaid 는 end 를 exclusive 로 처리. 완료·드롭일도 시각화에 포함되도록 +1일.
-  const endExclusive = toIsoDate(addDays(item.end, 1));
-  return `${s}, ${endExclusive}`;
 }
