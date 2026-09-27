@@ -28,6 +28,10 @@ function dispatch(
   sourceNoteDate: Date,
   dropThreshold: number,
 ): void {
+  // 텍스트가 없는(공백만 있는) 빈 체크박스는 사용자가 채우지 않고 남긴 껍데기로 보고
+  // 어느 이벤트 버킷에도 넣지 않는다. 이월/드롭/완료 로그가 빈 항목으로 오염되지 않게.
+  if (block.topText.trim() === "") return;
+
   if (block.isDroppedImmediate) {
     events.dropped.push(finalizeForEvent(block, fromActive, sourceNoteDate));
     return;

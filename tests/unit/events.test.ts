@@ -163,6 +163,39 @@ describe("classifyEvents: 이월 블록 카운터", () => {
   });
 });
 
+describe("classifyEvents: 빈 항목 무시", () => {
+  it("빈 텍스트 활성 블록 → 이월/드롭/완료 어디에도 안 들어감", () => {
+    const e = classifyEvents(
+      parsedWith({
+        activeBlocks: [
+          makeBlock({ topText: "" }),
+          makeBlock({ topText: "   " }),
+        ],
+      }),
+    );
+    expect(e.carryingOver).toHaveLength(0);
+    expect(e.dropped).toHaveLength(0);
+    expect(e.completed).toHaveLength(0);
+    expect(e.archived).toHaveLength(0);
+  });
+
+  it("빈 텍스트 이월 블록 → 카운터 증가 없이 소거", () => {
+    const e = classifyEvents(
+      parsedWith({
+        carryoverBlocks: [
+          makeBlock({
+            topText: "",
+            carryoverDays: 2,
+            originDate: fromIsoDate("2026-09-11"),
+          }),
+        ],
+      }),
+    );
+    expect(e.carryingOver).toHaveLength(0);
+    expect(e.dropped).toHaveLength(0);
+  });
+});
+
 describe("classifyEvents: children 보존", () => {
   it("이월된 블록의 children 이 그대로 유지", () => {
     const e = classifyEvents(
