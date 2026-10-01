@@ -9,25 +9,7 @@ import { dailyNotePath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(vault: InMemoryVault, override: Partial<DailyNoteSettings> = {}) {
   const s = makeSettings({ ...override });

@@ -20,6 +20,8 @@ export default class DailyNoteManagerPlugin extends Plugin {
    * 강제 재렌더해 정정된 값을 즉시 반영하기 위해 저장해 둔다.
    */
   settingTab: DailyNoteSettingTab | null = null;
+  /** 자동 생성 실패 알림의 중복 방지용(세션 메모리 전용). */
+  private lastNotifiedFailureDate: string | null = null;
   async onload() {
     await this.loadSettings();
 
@@ -47,12 +49,23 @@ export default class DailyNoteManagerPlugin extends Plugin {
       callback: () => this.activateTimelineView(),
     });
 
-    // 노트 생성은 스케줄러 하나로만 진입한다. 첫 tick 이 오늘 노트를 만든다.
+    // 자동 생성은 스케줄러가 맡는다. 첫 tick 이 오늘 노트를 만든다.
     // 볼트 파일 목록이 다 올라온 뒤 시작해야 "이미 있는 노트" 판정이 정확하다.
-    this.scheduler = new Scheduler(this.engine, this);
+    this.scheduler = new Scheduler(this.engine, this, (err, iso) => this.notifyAutoCreateFailure(err, iso));
     this.app.workspace.onLayoutReady(() => {
       this.scheduler.start();
     });
+  }
+
+  /**
+   * 자동 생성 실패를 사용자에게 알린다. 스케줄러가 1분마다 재시도하므로 같은 날짜에 대해서는
+   * 세션당 한 번만 띄운다. 날짜가 바뀌거나 플러그인을 다시 켜면 다시 알린다.
+   */
+  private notifyAutoCreateFailure(err: unknown, todayIso: string): void {
+    if (this.lastNotifiedFailureDate === todayIso) return;
+    this.lastNotifiedFailureDate = todayIso;
+    const lc = resolveLocale(this.settings.language);
+    new Notice(t("noticeAutoCreateFailed", lc, { msg: (err as Error)?.message ?? String(err) }), 10000);
   }
 
   onunload() {

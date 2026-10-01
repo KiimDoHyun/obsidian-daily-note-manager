@@ -1,9 +1,9 @@
 /**
- * 하루 실행 흐름(runDaily) + 중복 실행 방지 + 재실행 멱등성.
+ * 하루 실행 흐름(스케줄러 → createForToday) + 중복 실행 방지 + 재실행 멱등성.
  *
  * 배경: 예전에는 스케줄러(오늘만 생성)와 catchUp(놓친 날 + 오늘)이 각자 출발해
  * 어느 쪽이 먼저 끝나느냐에 따라 이월 일수가 달라졌다.
- * 이제 진입점은 runDaily 하나이고 항상 오늘 노트만 만든다(부재 정책은 absence-policy.test.ts).
+ * 이제 스케줄러는 createForToday 만 부르고 항상 오늘 노트만 만든다(부재 정책은 absence-policy.test.ts).
  * 엔진 내부 잠금으로 어떤 진입점이든 동시에 두 실행이 섞이지 않는다.
  */
 import { describe, it, expect } from "vitest";
@@ -20,25 +20,7 @@ import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
 import type { Plugin } from "obsidian";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(
   vault: InMemoryVault,
@@ -61,7 +43,7 @@ function notePaths(vault: InMemoryVault): string[] {
     .map((p) => p.slice(-13, -3));
 }
 
-describe("runDaily — 스케줄러가 부르는 하루 실행", () => {
+describe("스케줄러가 부르는 하루 실행", () => {
   it("스케줄러 tick 하나로 오늘 노트만 생기고, 그 사이 영업일만큼 이월 일수가 오른다", async () => {
     // 수(09-16) 이후 처음 켠 날이 월(09-21). 목·금·월 = 3일.
     const vault = new InMemoryVault();
@@ -83,7 +65,7 @@ describe("runDaily — 스케줄러가 부르는 하루 실행", () => {
 });
 
 describe("엔진 잠금 — 진입점이 겹쳐도 한 번에 하나씩", () => {
-  it("runDaily 와 createForToday 가 동시에 불려도 오늘 노트·완료 로그는 한 번만", async () => {
+  it("스케줄러 실행과 명령 실행이 동시에 불려도 오늘 노트·완료 로그는 한 번만", async () => {
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-18", async () => {
       const { engine, settings } = makeEngine(vault, { lastRunDate: "2026-09-17" });
@@ -100,7 +82,7 @@ describe("엔진 잠금 — 진입점이 겹쳐도 한 번에 하나씩", () => 
       vault.read = slow(vault.read.bind(vault));
       vault.write = slow(vault.write.bind(vault));
 
-      const results = await Promise.all([engine.runDaily(), engine.createForToday()]);
+      const results = await Promise.all([engine.createForToday(), engine.createForToday()]);
 
       const statuses = results.map((r) => r.status).sort();
       expect(statuses).toEqual(["created", "skipped_exists"]);

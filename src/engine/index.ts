@@ -4,7 +4,6 @@ import {
   fromIsoDate,
   isWeekend,
   nextBusinessDay,
-  previousBusinessDay,
   today as todayDate,
   toIsoDate,
   ymOf,
@@ -16,6 +15,7 @@ import {
   emptyEvents,
   emptyParsed,
   type DailyNoteParsed,
+  type DatedEvent,
   type Events,
   type TaskBlock,
 } from "./types";
@@ -27,7 +27,6 @@ import {
   appendEvent as appendSummaryEvent,
   ensureSummary,
   recomputeHeader,
-  type SummaryEventType,
 } from "./writers/monthlySummary";
 import { drainQueue, enqueue, type PendingEntry } from "./writers/pendingQueue";
 import { stripTimelineSection } from "./writers/timeline";
@@ -38,15 +37,10 @@ export type RunStatus =
   | "skipped_exists"
   | "dry_run";
 
-/** 마지막 실행 기록이 없을 때(첫 실행 등) 이전 노트를 찾아볼 최대 일수. */
+/** 마지막 실행 기록이 없을 때(첫 실행) 이전 노트를 찾아볼 일수. 오래된 노트를 끌어와 한꺼번에 드롭하지 않게. */
 const FIRST_RUN_LOOKBACK_DAYS = 14;
-
-/** 발생 날짜가 붙은 이벤트. 날짜가 곧 기록될 달 문서를 정한다. */
-interface DatedEvent {
-  eventType: SummaryEventType;
-  date: Date;
-  block: TaskBlock;
-}
+/** 마지막 실행 기록이 있을 때 이전 노트를 찾아볼 최대 일수(약 5년). 몇 달을 비워도 이어받기 위함. */
+const MAX_LOOKBACK_DAYS = 366 * 5;
 
 export interface RunResult {
   status: RunStatus;
@@ -93,6 +87,12 @@ export interface DoctorReport {
   lastRunDate: string | null;
 }
 
+const TARGET_LABEL: Record<PendingEntry["target"], string> = {
+  summary: "월간 종합 문서",
+  drop: "월간 드롭 문서",
+  archive: "보관함 문서",
+};
+
 export class Engine {
   constructor(
     private vault: VaultLike,
@@ -106,35 +106,29 @@ export class Engine {
    * 엔진 실행 잠금. 노트 생성·재생성·대기열 처리처럼 볼트를 쓰는 작업은 이 사슬에 줄을 서서
    * 한 번에 하나씩만 돈다. 스케줄러·명령어가 동시에 불러도 "둘 다 오늘 노트가 없다고 보고
    * 같은 기록을 두 번 남기는" 일이 생기지 않는다.
+   * 사슬 자체는 실패를 삼켜 늘 성공으로 끝나므로, 한 번 실패해도 다음 작업이 막히지 않는다.
+   * 실패는 각 호출자에게 그대로 전달된다.
    */
   private lock: Promise<unknown> = Promise.resolve();
 
   private serialize<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.lock.then(fn, fn);
+    const run = this.lock.then(fn);
     this.lock = run.catch(() => undefined);
     return run;
   }
 
-  updateSettings(settings: DailyNoteSettings): void {
-    this.settings = settings;
-  }
-
   /**
-   * 하루 실행의 단일 진입점. 스케줄러는 이것만 부른다.
+   * 오늘 노트 생성. 스케줄러와 "오늘 노트 생성" 명령이 모두 이것을 부른다.
    * 며칠을 비웠든 오늘 노트 하나만 만든다. 그 사이 날짜의 노트는 만들지 않지만,
-   * 이월 일수·드롭은 그 사이 날마다 노트가 있었던 것처럼 계산한다(runCreate 의 simulate).
+   * 이월 일수·드롭은 그 사이 날마다 노트가 있었던 것처럼 계산한다(simulate).
    */
-  async runDaily(): Promise<CreateResult> {
-    return this.createForToday();
-  }
-
   async createForToday(): Promise<CreateResult> {
     return this.serialize(async () => this.toCreateResult(await this.runCreate(todayDate(), false)));
   }
 
+  /** 미리보기. 볼트를 바꾸지 않지만, 쓰는 작업 도중의 어중간한 상태를 읽지 않게 같은 줄에 선다. */
   async dryRun(): Promise<DryRunReport> {
-    const result = await this.runCreate(todayDate(), true);
-    return this.toDryRunReport(result);
+    return this.serialize(async () => this.toDryRunReport(await this.runCreate(todayDate(), true)));
   }
 
   async forceDate(target: Date): Promise<CreateResult> {
@@ -174,9 +168,13 @@ export class Engine {
 
   // ---------- internal ----------
 
-  /** 대기 큐를 명시적으로 재시도. 명령어에서 직접 호출. */
+  /** 대기 큐를 명시적으로 재시도. 명령어에서 직접 호출. 기록이 들어간 달의 요약 숫자도 다시 센다. */
   async drainPendingQueue(): Promise<{ drained: number; remaining: number }> {
-    return this.serialize(() => drainQueue(this.vault, this.settings));
+    return this.serialize(async () => {
+      const res = await drainQueue(this.vault, this.settings);
+      await this.recomputeHeaders(res.writtenSummaryPaths);
+      return { drained: res.drained, remaining: res.remaining };
+    });
   }
 
   private async runCreate(today: Date, dryRun: boolean): Promise<RunResult> {
@@ -188,26 +186,22 @@ export class Engine {
 
     // 이미 존재하는 경우에도 대기열은 재시도한다. dry-run 은 순수 조회이므로 큐를 건드리지 않는다.
     if (this.vault.exists(todayPath)) {
-      if (!dryRun) await this.tryDrainQueue();
+      if (!dryRun) await this.recomputeHeaders(await this.tryDrainQueue());
       return this.result("skipped_exists", today, todayPath, null, null, null, "이미 존재");
     }
 
     const { prevDate, prevPath } = await this.findPreviousNote(today);
-    let parsed: DailyNoteParsed;
-    let effectivePrevDate = prevDate;
-    if (prevPath !== null && prevDate !== null) {
-      const raw = await this.vault.read(prevPath);
-      parsed = parseDailyNoteText(raw, prevDate);
-    } else {
-      const fallback = addDays(today, -1);
-      parsed = emptyParsed(fallback);
-      effectivePrevDate = fallback;
-    }
+    // 이전 노트가 없으면(첫 실행) 어제 날짜의 빈 노트에서 시작한 것으로 본다.
+    const sourceDate: Date = prevDate ?? addDays(today, -1);
+    const parsed: DailyNoteParsed =
+      prevPath !== null
+        ? parseDailyNoteText(await this.vault.read(prevPath), sourceDate)
+        : emptyParsed(sourceDate);
 
-    const { events, dated } = this.simulate(parsed, effectivePrevDate!, today);
+    const { events, dated } = this.simulate(parsed, sourceDate, today);
 
     if (dryRun) {
-      return this.result("dry_run", today, todayPath, effectivePrevDate, prevPath, events, "dry-run");
+      return this.result("dry_run", today, todayPath, sourceDate, prevPath, events, "dry-run");
     }
 
     // 실제 실행. 순서 규칙:
@@ -215,22 +209,20 @@ export class Engine {
     // 2) 오늘 데일리 노트를 먼저 쓴다. 이후 어떤 실패가 나도 오늘 노트는 반드시 남는다.
     // 3) 종합/드롭/보관 쓰기는 실패 시 대기 큐로 밀어 넣는다. 이벤트는 발생한 날짜의 달 문서로 간다.
     // 4) 헤더 재계산·타임라인 후처리는 관련된 달마다 개별 try/catch 로 격리한다.
-    await this.tryDrainQueue();
+    const drainedSummaries = await this.tryDrainQueue();
 
     // 직접 [-] 로 지운 항목은 사용자가 이미 알고 있으므로, 기준일 도달로 자동 드롭된 것만 알린다.
-    const autoDropped = dated
-      .filter((e) => e.eventType === "dropped" && !e.block.isDroppedImmediate)
-      .map((e) => ({ block: e.block, date: e.date }));
+    const autoDropped = dated.filter((e) => e.eventType === "dropped" && !e.block.isDroppedImmediate);
     await this.vault.write(
       todayPath,
       renderDailyNote(today, events.carryingOver, this.settings, autoDropped),
     );
 
-    const touchedMonths = await this.appendEventsInOrder(dated);
+    await this.appendEventsInOrder(dated);
 
     // 이번 달 + 이전 노트의 달 + 이벤트가 기록된 달 모두 종합 문서를 갖추고 요약 숫자를 다시 센다.
     const months = new Map<string, Date>();
-    for (const d of [today, effectivePrevDate!, ...touchedMonths]) months.set(ymOf(d), d);
+    for (const d of [today, sourceDate, ...dated.map((e) => e.date)]) months.set(ymOf(d), d);
     for (const d of months.values()) {
       try {
         const path = await ensureSummary(d, this.vault, this.settings);
@@ -244,15 +236,33 @@ export class Engine {
         console.error(`[daily-note] ${ymOf(d)} 종합 문서 타임라인 섹션 정리 실패`, err);
       }
     }
+    // 대기열이 다른 달(예: 몇 달 전) 문서에 기록했다면 그 달도 요약 숫자를 다시 센다.
+    const monthPaths = new Set(
+      [...months.values()].map((d) => monthlySummaryPath(d, this.settings)),
+    );
+    await this.recomputeHeaders(drainedSummaries.filter((p) => !monthPaths.has(p)));
 
-    this.settings.lastRunDate = toIsoDate(today);
+    this.advanceLastRunDate(today);
     try {
       await this.saveSettings();
     } catch (err) {
       console.error("[daily-note] 설정 저장 실패", err);
     }
 
-    return this.result("created", today, todayPath, effectivePrevDate, prevPath, events);
+    return this.result("created", today, todayPath, sourceDate, prevPath, events);
+  }
+
+  /**
+   * 마지막 실행일은 앞으로만 간다. 단, 실제 오늘을 넘지 않는다.
+   * - 과거 날짜를 강제 생성해도 뒤로 가지 않는다.
+   * - 미래 날짜를 강제 생성해도(또는 다른 기기에서 미래 값이 동기화돼 와도) 실제 오늘로 묶인다.
+   */
+  private advanceLastRunDate(target: Date): void {
+    const realToday = todayDate();
+    const prev = this.settings.lastRunDate ? fromIsoDate(this.settings.lastRunDate) : null;
+    let next = prev !== null && prev > target ? prev : target;
+    if (next > realToday) next = realToday;
+    this.settings.lastRunDate = toIsoDate(next);
   }
 
   /**
@@ -269,34 +279,52 @@ export class Engine {
   ): { events: Events; dated: DatedEvent[] } {
     const nextNoteDay = (d: Date) =>
       this.settings.skipWeekend ? nextBusinessDay(d) : addDays(d, 1);
-    const events = emptyEvents();
     const dated: DatedEvent[] = [];
     let state = parsed;
     let cur = prevDate;
+    let carrying: TaskBlock[];
+    // 노트 하루 분량씩 분류한다. 다음 노트 날이 오늘에 닿거나 넘길 항목이 없으면 멈춘다.
     for (;;) {
       const step = classifyEvents(state, this.settings.dropThresholdDays);
       for (const block of step.completed) dated.push({ eventType: "completed", date: cur, block });
       for (const block of step.dropped) dated.push({ eventType: "dropped", date: cur, block });
       for (const block of step.archived) dated.push({ eventType: "archived", date: cur, block });
-      events.completed.push(...step.completed);
-      events.dropped.push(...step.dropped);
-      events.archived.push(...step.archived);
-
+      carrying = step.carryingOver;
       const next = nextNoteDay(cur);
-      if (next >= today || step.carryingOver.length === 0) {
-        events.carryingOver = step.carryingOver;
-        return { events, dated };
-      }
-      state = { noteDate: next, activeBlocks: [], carryoverBlocks: step.carryingOver, memoLines: [] };
+      if (next >= today || carrying.length === 0) break;
+      state = { ...emptyParsed(next), carryoverBlocks: carrying };
       cur = next;
+    }
+    const pick = (t: DatedEvent["eventType"]) =>
+      dated.filter((e) => e.eventType === t).map((e) => e.block);
+    return {
+      events: {
+        completed: pick("completed"),
+        dropped: pick("dropped"),
+        archived: pick("archived"),
+        carryingOver: carrying,
+      },
+      dated,
+    };
+  }
+
+  /** 대기열을 재시도하고, 기록이 들어간 종합 문서 경로들을 돌려준다. 실패해도 노트 생성은 계속한다. */
+  private async tryDrainQueue(): Promise<string[]> {
+    try {
+      return (await drainQueue(this.vault, this.settings)).writtenSummaryPaths;
+    } catch (err) {
+      console.error("[daily-note] 대기열 처리 중 오류", err);
+      return [];
     }
   }
 
-  private async tryDrainQueue(): Promise<void> {
-    try {
-      await drainQueue(this.vault, this.settings);
-    } catch (err) {
-      console.error("[daily-note] 대기열 처리 중 오류", err);
+  private async recomputeHeaders(summaryPaths: string[]): Promise<void> {
+    for (const path of summaryPaths) {
+      try {
+        await recomputeHeader(path, this.vault);
+      } catch (err) {
+        console.error(`[daily-note] 종합 헤더 재계산 실패: ${path}`, err);
+      }
     }
   }
 
@@ -319,132 +347,108 @@ export class Engine {
    * - 완료: 월간 종합
    * - 드롭: 월간 드롭 문서(항목 + 하위 메모) + 월간 종합
    * - 보관: 보관함(항목 + 하위 메모) + 월간 종합
-   * 기록한(또는 기록하려 한) 이벤트 날짜들을 돌려준다 — 호출 측이 그 달들의 요약을 다시 센다.
    */
-  private async appendEventsInOrder(dated: DatedEvent[]): Promise<Date[]> {
-    const summaryPaths = new Map<string, string | null>();
-    const dropPaths = new Map<string, string | null>();
-    let arcPath: string | null | undefined;
-
-    const prepare = async <T>(
-      cache: Map<string, T | null>,
-      key: string,
-      make: () => Promise<T>,
-      label: string,
-    ): Promise<T | null> => {
-      if (!cache.has(key)) {
+  private async appendEventsInOrder(dated: DatedEvent[]): Promise<void> {
+    // 문서 경로는 문서 종류·달마다 한 번만 준비한다. 준비에 실패하면 null 로 기억해 그 문서의
+    // 이벤트를 모두 대기열로 보낸다.
+    const prepared = new Map<string, string | null>();
+    const prepare = async (key: string, label: string, make: () => Promise<string>) => {
+      if (!prepared.has(key)) {
         try {
-          cache.set(key, await make());
+          prepared.set(key, await make());
         } catch (err) {
           console.error(`[daily-note] ${label} 준비 실패 → 대기열 저장`, err);
-          cache.set(key, null);
+          prepared.set(key, null);
         }
       }
-      return cache.get(key) ?? null;
+      return prepared.get(key) ?? null;
     };
 
-    const toSummary = async (e: DatedEvent) => {
-      const summaryPath = await prepare(summaryPaths, ymOf(e.date), () =>
-        ensureSummary(e.date, this.vault, this.settings), "월간 종합 문서");
-      if (summaryPath !== null) {
-        try {
-          await appendSummaryEvent(summaryPath, e.eventType, e.date, e.block, this.vault);
-          return;
-        } catch (err) {
-          console.error(`[daily-note] 종합 ${e.eventType} 로그 실패 → 대기열 저장`, err);
-        }
-      }
-      await this.enqueueEvent({
-        eventType: e.eventType,
-        eventDate: toIsoDate(e.date),
-        target: "summary",
-        targetSummaryPath: summaryPath ?? monthlySummaryPath(e.date, this.settings),
-        block: e.block,
-      });
+    // 같은 날짜·같은 내용의 이벤트가 몇 번째인지 센다. writer 는 이 수만큼만 같은 줄을 허용하므로
+    // 재실행해도 늘지 않고, 이름이 같은 서로 다른 항목은 각각 남는다.
+    const seen = new Map<string, number>();
+    const occurrenceOf = (e: DatedEvent) => {
+      const b = e.block;
+      const key = [e.eventType, toIsoDate(e.date), b.topText, b.carryoverDays,
+        b.originDate ? toIsoDate(b.originDate) : "", b.isDroppedImmediate].join("|");
+      const n = (seen.get(key) ?? 0) + 1;
+      seen.set(key, n);
+      return n;
     };
 
-    const order: SummaryEventType[] = ["completed", "dropped", "archived"];
+    const order: DatedEvent["eventType"][] = ["completed", "dropped", "archived"];
     const sorted = [...dated].sort(
       (a, b) => order.indexOf(a.eventType) - order.indexOf(b.eventType),
     );
     for (const e of sorted) {
+      const occurrence = occurrenceOf(e);
+      const isoDate = toIsoDate(e.date);
       if (e.eventType === "dropped") {
-        const dropPath = await prepare(dropPaths, ymOf(e.date), () =>
-          ensureDrop(e.date, this.vault, this.settings), "월간 드롭 문서");
-        await this.writeDocOrEnqueue(
-          "drop",
-          dropPath ?? monthlyDropPath(e.date, this.settings),
-          dropPath !== null,
-          toIsoDate(e.date),
-          e.block,
-          (p) => appendDropped(p, e.date, e.block, this.vault),
+        const path = await prepare(`drop:${ymOf(e.date)}`, "월간 드롭 문서", () =>
+          ensureDrop(e.date, this.vault, this.settings));
+        await this.writeOrEnqueue(
+          { target: "drop", eventType: "dropped", eventDate: isoDate, block: e.block, occurrence,
+            targetPath: path ?? monthlyDropPath(e.date, this.settings) },
+          path,
+          (p) => appendDropped(p, e.date, e.block, this.vault, occurrence),
         );
       } else if (e.eventType === "archived") {
-        if (arcPath === undefined) {
-          try {
-            arcPath = await ensureArchive(this.vault, this.settings);
-          } catch (err) {
-            console.error("[daily-note] 보관함 문서 준비 실패 → 대기열 저장", err);
-            arcPath = null;
-          }
-        }
-        await this.writeDocOrEnqueue(
-          "archive",
-          arcPath ?? archivePath(this.settings),
-          arcPath !== null,
-          toIsoDate(e.date),
-          e.block,
-          (p) => appendArchived(p, e.date, e.block, this.vault),
+        const path = await prepare("archive", "보관함 문서", () =>
+          ensureArchive(this.vault, this.settings));
+        await this.writeOrEnqueue(
+          { target: "archive", eventType: "archived", eventDate: isoDate, block: e.block, occurrence,
+            targetPath: path ?? archivePath(this.settings) },
+          path,
+          (p) => appendArchived(p, e.date, e.block, this.vault, occurrence),
         );
       }
-      await toSummary(e);
+      const summary = await prepare(`summary:${ymOf(e.date)}`, "월간 종합 문서", () =>
+        ensureSummary(e.date, this.vault, this.settings));
+      await this.writeOrEnqueue(
+        { target: "summary", eventType: e.eventType, eventDate: isoDate, block: e.block, occurrence,
+          targetPath: summary ?? monthlySummaryPath(e.date, this.settings) },
+        summary,
+        (p) => appendSummaryEvent(p, e.eventType, e.date, e.block, this.vault, occurrence),
+      );
     }
-    return dated.map((e) => e.date);
   }
 
-  /** 드롭·보관 문서 쓰기. 문서 준비에 실패했거나 쓰기가 실패하면 원본 블록을 대기열에 보존한다. */
-  private async writeDocOrEnqueue(
-    target: "drop" | "archive",
-    path: string,
-    ready: boolean,
-    isoDate: string,
-    block: TaskBlock,
+  /**
+   * 문서 하나에 쓴다. 문서 준비에 실패했거나(path 가 null) 쓰기가 실패하면 원본 블록을
+   * 대기열에 보존해 다음 실행에서 다시 시도한다.
+   */
+  private async writeOrEnqueue(
+    entry: PendingEntry,
+    path: string | null,
     write: (path: string) => Promise<void>,
   ): Promise<void> {
-    if (ready) {
+    if (path !== null) {
       try {
         await write(path);
         return;
       } catch (err) {
-        console.error(`[daily-note] ${target} 문서 쓰기 실패 → 대기열 저장`, err);
+        console.error(`[daily-note] ${TARGET_LABEL[entry.target]} 쓰기 실패 → 대기열 저장`, err);
       }
     }
-    await this.enqueueEvent({
-      eventType: target === "drop" ? "dropped" : "archived",
-      eventDate: isoDate,
-      target,
-      targetSummaryPath: path,
-      block,
-    });
+    await this.enqueueEvent(entry);
   }
 
+  /**
+   * 오늘 직전부터 거슬러 올라가며 가장 최근 노트를 찾는다.
+   * - 마지막 실행 기록이 있으면 최대 MAX_LOOKBACK_DAYS 까지 본다. 몇 달을 비웠어도, 그리고 그날
+   *   오늘 노트를 강제로 다시 만들어도(마지막 실행일이 이미 오늘이어도) 이전 노트를 이어받는다.
+   * - 첫 실행이면 FIRST_RUN_LOOKBACK_DAYS 까지만 본다.
+   * - 주말 제외 설정이면 주말은 건너뛰되, 마지막 실행일 노트는 주말이어도 본다(설정을 바꾸기 전에
+   *   주말 노트를 만들었을 수 있다). 주말 제외를 끄면 어제(일요일 포함)부터 본다.
+   */
   private async findPreviousNote(
     today: Date,
   ): Promise<{ prevDate: Date | null; prevPath: string | null }> {
-    const first = previousBusinessDay(today);
-    const firstPath = dailyNotePath(first, this.settings);
-    if (this.vault.exists(firstPath)) return { prevDate: first, prevPath: firstPath };
-
-    // 마지막 실행일까지 거슬러 올라가며 가장 최근 노트를 찾는다. 몇 달을 비웠어도 이어받아야
-    // 그 노트의 미완료 항목과 완료 기록이 사라지지 않는다. 마지막 실행 기록이 없거나(첫 실행)
-    // 그 노트가 지워졌다면 최근 FIRST_RUN_LOOKBACK_DAYS 일까지만 본다.
-    const recentFloor = addDays(today, -FIRST_RUN_LOOKBACK_DAYS);
     const last = this.settings.lastRunDate ? fromIsoDate(this.settings.lastRunDate) : null;
-    const floor = last !== null && last < recentFloor ? last : recentFloor;
+    const floor = addDays(today, -(last === null ? FIRST_RUN_LOOKBACK_DAYS : MAX_LOOKBACK_DAYS));
     for (let candidate = addDays(today, -1); candidate >= floor; candidate = addDays(candidate, -1)) {
-      if (this.settings.skipWeekend && isWeekend(candidate) && candidate.getTime() !== last?.getTime()) {
-        continue;
-      }
+      const isLastRunDay = last !== null && candidate.getTime() === last.getTime();
+      if (this.settings.skipWeekend && isWeekend(candidate) && !isLastRunDay) continue;
       const path = dailyNotePath(candidate, this.settings);
       if (this.vault.exists(path)) return { prevDate: candidate, prevPath: path };
     }

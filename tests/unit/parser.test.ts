@@ -525,6 +525,7 @@ describe("parser: 마커는 옵시디언 태그 단위로만 인식", () => {
       activeLines: ["- [ ] A #장기프로젝트", "- [ ] B #보관함정리", "- [ ] C #장기_x", "- [ ] D #보관-1"],
     });
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks).toHaveLength(4);
     for (const b of p.activeBlocks) {
       expect([b.topText, b.hasLongMarker, b.hasArchiveMarker]).toEqual([b.topText, false, false]);
     }
@@ -552,6 +553,14 @@ describe("parser: 손으로 망가뜨린 이월 태그", () => {
     });
     const p = parseDailyNoteText(md, fromIsoDate("2026-09-17"));
     expect(p.carryoverBlocks[0].carryoverDays).toBe(2);
+  });
+});
+
+describe("parser: 마커 경계 — 앞에 다른 태그가 있어도 뒤의 진짜 마커를 찾는다", () => {
+  it("`#장기프로젝트 … #장기` 는 장기 마커로 인식", () => {
+    const md = makeDailyNoteMd({ date: "2026-09-15", activeLines: ["- [ ] A #장기프로젝트 관련 #장기"] });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks[0].hasLongMarker).toBe(true);
   });
 });
 

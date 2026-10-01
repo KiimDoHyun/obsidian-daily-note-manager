@@ -170,13 +170,16 @@ function isTopLevelLine(line: string): boolean {
   return TOP_LEVEL_LINE_RE.test(line);
 }
 
+// 태그 이름에 이어질 수 있는 글자(글자·숫자·`_`·`-`). 이 글자가 바로 뒤에 오면 다른 태그다.
+const TAG_NAME_CHAR_RE = /[\p{L}\p{N}_-]/u;
+
 // 옵시디언 태그는 글자·숫자·`_`·`-` 가 이어지는 한 하나의 태그다. `#장기프로젝트` 는 `#장기` 와 다른 태그.
 // `/` 는 하위 태그 구분자라 `#장기/연구` 는 `#장기` 의 하위로 보고 마커로 인정한다.
 function hasTag(text: string, tag: string): boolean {
   let from = 0;
   for (let i = text.indexOf(tag, from); i !== -1; i = text.indexOf(tag, from)) {
     const next = text.charAt(i + tag.length);
-    if (!/[\p{L}\p{N}_-]/u.test(next)) return true;
+    if (!TAG_NAME_CHAR_RE.test(next)) return true;
     from = i + tag.length;
   }
   return false;

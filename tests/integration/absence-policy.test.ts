@@ -18,27 +18,9 @@ import { toIsoDate } from "../../src/engine/dateutil";
 import { fromIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlyDropPath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
-import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
+import { carriedNames, makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 async function returnAfterAbsence(
   lastIso: string,
@@ -50,7 +32,7 @@ async function returnAfterAbsence(
   const settings = makeSettings({ lastRunDate: lastIso, ...overrides });
   vault.seed(dailyNotePath(fromIsoDate(lastIso), settings), makeDailyNoteMd({ date: lastIso, ...note }));
   await withFixedToday(todayIso, async () => {
-    await new Engine(vault, settings, async () => {}).runDaily();
+    await new Engine(vault, settings, async () => {}).createForToday();
   });
   const notes = vault.list().filter((p) => p.includes("📅")).map((p) => p.slice(-13, -3));
   const peek = (p: string) => vault.peek(p) ?? "";
@@ -78,7 +60,7 @@ describe("부재 후 복귀 — 오늘 노트만 만든다", () => {
       activeLines: ["- [ ] 일반 업무", "- [ ] 긴 업무 #장기", "- [x] 떠나기 전 끝낸 일"],
     });
     // 일반 업무: 05-14(1) 15(2) 18(3) 19(4) → 20일에 5일째 → 드롭. 기록 날짜는 19일.
-    expect(r.today).not.toMatch(/^- \[ \] 일반 업무/m);
+    expect(carriedNames(r.today).some((n) => n.includes("일반 업무"))).toBe(false);
     expect(r.dropOf("2026-05-19")).toContain("- [-] 일반 업무 (05-13 시작, 05-19 드롭, 5영업일 이월)");
     const may = r.summaryOf("2026-05-19");
     expect(may).toContain("- 05-19 일반 업무 (05-13 시작, 5영업일 이월 후 드롭)");
@@ -102,7 +84,7 @@ describe("부재 후 복귀 — 오늘 노트만 만든다", () => {
       activeLines: ["- [ ] 일반 업무", "- [ ] 긴 업무 #장기"],
     });
     expect(r.notes).toEqual(["2026-09-11", "2026-09-21"]);
-    expect(r.today).not.toMatch(/^- \[ \] 일반 업무/m);
+    expect(carriedNames(r.today).some((n) => n.includes("일반 업무"))).toBe(false);
     expect(r.dropOf("2026-09-17")).toContain("- [-] 일반 업무 (09-11 시작, 09-17 드롭, 5영업일 이월)");
     expect(r.today).toContain("- [ ] 긴 업무 #장기 (⏰ 6일째 이월, 09-11~)");
   });
@@ -173,7 +155,7 @@ describe("부재 후 복귀 — 오늘 노트만 만든다", () => {
     expect(r.vault.exists(monthlySummaryPath(fromIsoDate("2026-07-01"), r.settings))).toBe(false);
     expect(r.vault.exists(monthlySummaryPath(fromIsoDate("2026-08-01"), r.settings))).toBe(false);
     expect(r.notes).toEqual(["2026-05-29", "2026-09-01"]);
-    expect(r.today).not.toMatch(/^- \[ \] 5월 말 등록 업무/m);
+    expect(carriedNames(r.today).some((n) => n.includes("5월 말 등록 업무"))).toBe(false);
   });
 
   it("어제 노트에서 이어지는 평소 하루는 기존과 똑같이 +1", async () => {
@@ -185,7 +167,7 @@ describe("부재 후 복귀 — 오늘 노트만 만든다", () => {
     const vault = new InMemoryVault();
     const settings = makeSettings({ lastRunDate: null });
     await withFixedToday("2026-09-15", async () => {
-      await new Engine(vault, settings, async () => {}).runDaily();
+      await new Engine(vault, settings, async () => {}).createForToday();
     });
     expect(vault.list().filter((p) => p.includes("📅"))).toHaveLength(1);
   });
@@ -193,7 +175,7 @@ describe("부재 후 복귀 — 오늘 노트만 만든다", () => {
 
 describe("#장기 업무 — 100일 넘는 이월", () => {
   const run = async (vault: InMemoryVault, settings: DailyNoteSettings, iso: string) =>
-    withFixedToday(iso, () => new Engine(vault, settings, async () => {}).runDaily());
+    withFixedToday(iso, () => new Engine(vault, settings, async () => {}).createForToday());
 
   it("5월 13일 → 10월 15일(111영업일): 세 자리 일수로 넘어오고, 경고 없이, 하위 메모도 유지", async () => {
     const r = await returnAfterAbsence("2026-05-13", "2026-10-15", {

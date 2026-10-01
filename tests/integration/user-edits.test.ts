@@ -6,26 +6,8 @@ import { Engine } from "../../src/engine";
 import { fromIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
-import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { carriedNames, makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
+import { withFixedToday } from "../helpers/fixedDate";
 
 async function runNextDay(prevIso: string, todayIso: string, md: string) {
   const vault = new InMemoryVault();
@@ -74,7 +56,7 @@ describe("사용자 편집 — 다음 날 흐름", () => {
         carryoverLines: ["- [ ] 보고서 (⏰ 4일째 이월, 09-11~) (🔴 드롭 예정입니다) 내일까지"],
       }),
     );
-    expect(today).not.toMatch(/^- \[ \] 보고서/m);
+    expect(carriedNames(today).some((n) => n.includes("보고서"))).toBe(false);
     expect(summary).toContain("보고서 내일까지 (09-11 시작, 5영업일 이월 후 드롭)");
   });
 });

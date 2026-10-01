@@ -12,20 +12,15 @@ import {
 } from "../constants";
 import { mmddOf, toIsoDate, ymOf } from "../dateutil";
 import { monthlyDropWikilink, monthlySummaryWikilink } from "../paths";
-import type { TaskBlock } from "../types";
+import type { DatedEvent, TaskBlock } from "../types";
 import type { DailyNoteSettings } from "../../settings";
-
-/** 이번 실행에서 자동 드롭된 항목과 그 기록 날짜(드롭 직전 마지막으로 노트에 있었던 날). */
-export interface AutoDroppedItem {
-  block: TaskBlock;
-  date: Date;
-}
 
 export function renderDailyNote(
   today: Date,
   carryingOver: TaskBlock[],
   settings: DailyNoteSettings,
-  autoDropped: AutoDroppedItem[] = [],
+  /** 이번 실행에서 자동 드롭된 항목. date 는 드롭 직전 마지막으로 노트에 있었던 날. */
+  autoDropped: Pick<DatedEvent, "block" | "date">[] = [],
 ): string {
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
   const warnOrange = Math.max(1, settings.dropThresholdDays - settings.warnOrangeDaysBeforeDrop);
@@ -73,7 +68,10 @@ export function renderDailyNote(
   return parts.join("\n");
 }
 
-function renderDroppedToday(items: AutoDroppedItem[], settings: DailyNoteSettings): string[] {
+function renderDroppedToday(
+  items: Pick<DatedEvent, "block" | "date">[],
+  settings: DailyNoteSettings,
+): string[] {
   const sorted = [...items].sort((a, b) => a.date.getTime() - b.date.getTime());
   const months: Date[] = [];
   for (const { date } of sorted) {
@@ -84,9 +82,13 @@ function renderDroppedToday(items: AutoDroppedItem[], settings: DailyNoteSetting
     `**${DROPPED_TODAY_TITLE} ${sorted.length}건** ` +
     `(이월 ${settings.dropThresholdDays}일째 도달 · ${links})`;
   // 체크박스가 아닌 점 목록: 눌러서 처리할 할 일로 오해하지 않게 하고, 파서가 읽을 일도 없다.
+  // 항목 이름이 `[ ]` 처럼 대괄호로 시작하면 점 목록이 체크박스로 렌더되므로 대괄호를 이스케이프한다.
+  // 날짜는 마지막으로 노트에 남아 있던 날이라 "~까지 이월 후 드롭" 으로 적는다(제목의 "오늘" 과
+  // 헷갈리지 않게). 일수는 주말 제외 설정에 따라 영업일·달력일이 섞이므로 "일" 로만 적는다.
   const lines = sorted.map(({ block, date }) => {
+    const name = block.topText.startsWith("[") ? `\\${block.topText}` : block.topText;
     const origin = block.originDate ? `${mmddOf(block.originDate)} 시작, ` : "";
-    return `- ${block.topText} (${origin}${mmddOf(date)} 드롭, ${block.carryoverDays}영업일 이월)`;
+    return `- ${name} (${origin}${mmddOf(date)}까지 ${block.carryoverDays}일 이월 후 드롭)`;
   });
   return [title, ...lines];
 }

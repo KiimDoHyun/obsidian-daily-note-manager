@@ -15,28 +15,11 @@ import {
   monthlyDropPath,
   monthlySummaryPath,
 } from "../../src/engine/paths";
+import { parseDailyNoteText } from "../../src/engine/parser";
 import { InMemoryVault } from "../helpers/inMemoryVault";
-import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
+import { carriedNames, makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(
   vault: InMemoryVault,
@@ -104,7 +87,7 @@ describe("월/년 경계 회귀", () => {
 
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-01-02"), settings))!;
       // 오늘 노트엔 안 남음
-      expect(today).not.toMatch(/^- \[ \] Year end long task/m);
+      expect(carriedNames(today).some((n) => n.includes("Year end long task"))).toBe(false);
 
       // 드롭 문서: 코드는 prevDate(=2026-01-01) 기준으로 monthlyDrop 을 씀 → 2026-01 드롭
       const janDropPath = "Notes/2026-01/2026-01 드롭.md";
@@ -113,7 +96,6 @@ describe("월/년 경계 회귀", () => {
       const inDec = vault.exists(decDropPath) && vault.peek(decDropPath)!.includes("Year end long task");
       // 사양: 드롭·완료 기록은 이벤트가 발생한 날(종료일) 기준으로 해당 월 문서에 남는다.
       // 즉 12-26 에 시작했더라도 01-02 에 드롭 판정이 나면 2026-01 드롭 문서로 간다.
-      expect(inJan || inDec).toBe(true);
       expect(inJan).toBe(true);
       expect(inDec).toBe(false);
     });
@@ -134,14 +116,13 @@ describe("월/년 경계 회귀", () => {
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-02-04"), settings))!;
-      expect(today).not.toMatch(/^- \[ \] Cross month task/m);
+      expect(carriedNames(today).some((n) => n.includes("Cross month task"))).toBe(false);
 
       const febDropPath = "Notes/2026-02/2026-02 드롭.md";
       const janDropPath = "Notes/2026-01/2026-01 드롭.md";
       const inFeb = vault.exists(febDropPath) && vault.peek(febDropPath)!.includes("Cross month task");
       const inJan = vault.exists(janDropPath) && vault.peek(janDropPath)!.includes("Cross month task");
       // 사양: 종료일 기준. 01-28 에 시작했어도 02-04 에 드롭 판정이 나면 2026-02 문서로.
-      expect(inFeb || inJan).toBe(true);
       expect(inFeb).toBe(true);
       expect(inJan).toBe(false);
     });
@@ -173,7 +154,7 @@ describe("월/년 경계 회귀", () => {
         makeDailyNoteMd({ date: "2025-12-30", activeLines: ["- [ ] carry across year"] }),
       );
 
-      await engine.runDaily();
+      await engine.createForToday();
 
       expect(vault.exists(dailyNotePath(fromIsoDate("2025-12-31"), settings))).toBe(false);
       expect(vault.exists(dailyNotePath(fromIsoDate("2026-01-02"), settings))).toBe(false);
@@ -192,7 +173,7 @@ describe("월/년 경계 회귀", () => {
         makeDailyNoteMd({ date: "2026-01-30", activeLines: ["- [ ] month-cross task"] }),
       );
 
-      await engine.runDaily();
+      await engine.createForToday();
 
       expect(vault.exists(dailyNotePath(fromIsoDate("2026-02-02"), settings))).toBe(false);
       const feb3 = vault.peek(dailyNotePath(fromIsoDate("2026-02-03"), settings))!;
@@ -239,16 +220,15 @@ describe("월/년 경계 회귀", () => {
       await engine.createForToday();
       // 5일째 도달 → 드롭 대상.
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-01-05"), settings))!;
-      expect(today).not.toMatch(/^- \[ \] Long carry/m);
-      // 드롭 문서에는 origin 표시가 남는다. prev(01-02) 기준 → 2026-01 드롭.
-      const janDrop = vault.peek(monthlyDropPath(fromIsoDate("2026-01-02"), settings));
-      const decDrop = vault.peek(monthlyDropPath(fromIsoDate("2025-12-30"), settings));
-      const anyMention = (janDrop && janDrop.includes("Long carry")) ||
-        (decDrop && decDrop.includes("Long carry"));
-      expect(anyMention).toBe(true);
-      // origin 이 12-30 으로 해석됐다는 신호가 드롭 로그에 남아있는지 (형식 유연 검증).
-      const dropContent = (janDrop ?? "") + (decDrop ?? "");
-      expect(dropContent).toMatch(/12-30/);
+      expect(carriedNames(today).some((n) => n.includes("Long carry"))).toBe(false);
+      // 01-02 노트를 다시 읽으면 시작일이 작년(2025-12-30)으로 해석돼야 한다.
+      const prevNote = vault.peek(dailyNotePath(fromIsoDate("2026-01-02"), settings))!;
+      const block = parseDailyNoteText(prevNote, fromIsoDate("2026-01-02")).carryoverBlocks[0];
+      expect(toIsoDate(block.originDate!)).toBe("2025-12-30");
+      // 드롭은 01-02 기준이라 2026-01 드롭 문서에만 남는다.
+      const janDrop = vault.peek(monthlyDropPath(fromIsoDate("2026-01-02"), settings))!;
+      expect(janDrop).toContain("- [-] Long carry (12-30 시작, 01-02 드롭, 5영업일 이월)");
+      expect(vault.exists(monthlyDropPath(fromIsoDate("2025-12-30"), settings))).toBe(false);
     });
   });
 

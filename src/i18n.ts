@@ -46,7 +46,6 @@ const M = {
   },
   longTermLabel: { ko: "[장기]", en: "[Long]" },
   sameDay: { ko: "당일", en: "Same day" },
-  viewDisplayLabel: { ko: "업무 타임라인", en: "Task Timeline" },
 
   // Ribbon
   ribbonOpenTimeline: { ko: "업무 타임라인 열기", en: "Open task timeline" },
@@ -86,6 +85,10 @@ cmdForceDate: {
   noticeCountsKo: {
     ko: "이월 {c} · 완료 {d} · 드롭 {r} · 보관 {a}",
     en: "carried {c} · done {d} · dropped {r} · archived {a}",
+  },
+  noticeAutoCreateFailed: {
+    ko: "Daily Note Manager: 오늘 노트를 자동으로 만들지 못했습니다 ({msg}). 1분마다 다시 시도합니다.",
+    en: "Daily Note Manager: couldn't create today's note automatically ({msg}). Retrying every minute.",
   },
   noticeCreateFailed: { ko: "생성 실패: {msg}", en: "Create failed: {msg}" },
   noticeDryRunSummary: {

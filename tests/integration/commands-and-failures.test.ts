@@ -9,28 +9,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Engine } from "../../src/engine";
 import { fromIsoDate } from "../../src/engine/dateutil";
 import { archivePath, dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
-import { pendingQueuePath, readQueue } from "../../src/engine/writers/pendingQueue";
+import { enqueue, pendingQueuePath, readQueue } from "../../src/engine/writers/pendingQueue";
+import { makeBlock } from "../../src/engine/types";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function snapshot(vault: InMemoryVault): Record<string, string> {
   return Object.fromEntries(vault.list().map((p) => [p, vault.peek(p)!]));
@@ -52,8 +35,19 @@ describe("미리보기 (dryRun)", () => {
         carryoverLines: ["- [ ] 오래된 일 (⏰ 4일째 이월, 09-11~) (🔴 드롭 예정입니다)"],
       }),
     );
-    // 대기열에 항목이 있어도 미리보기는 처리하지 않아야 한다.
-    vault.seed(pendingQueuePath(settings), "```queue\n```\n");
+    // 처리 가능한 항목이 대기열에 있어도 미리보기는 건드리지 않아야 한다.
+    await enqueue(
+      {
+        target: "summary",
+        eventType: "completed",
+        eventDate: "2026-09-16",
+        targetPath: monthlySummaryPath(fromIsoDate("2026-09-16"), settings),
+        block: makeBlock({ topText: "대기 중인 완료" }),
+        occurrence: 1,
+      },
+      vault,
+      settings,
+    );
     const before = snapshot(vault);
 
     const report = await withFixedToday("2026-09-18", () =>
@@ -139,3 +133,60 @@ describe("실패 경로", () => {
     expect(settings.lastRunDate).toBe("2026-09-18");
   });
 });
+
+describe("엔진 잠금 — 실패 뒤 복구", () => {
+  it("한 번 실패해도 같은 엔진의 다음 실행은 막히지 않고 정상 처리된다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const vault = new InMemoryVault();
+    const settings = makeSettings();
+    vault.seed(
+      dailyNotePath(fromIsoDate("2026-09-17"), settings),
+      makeDailyNoteMd({ date: "2026-09-17", activeLines: ["- [x] 끝낸 일"] }),
+    );
+    const todayPath = dailyNotePath(fromIsoDate("2026-09-18"), settings);
+    const write = vault.write.bind(vault);
+    let blocked = true;
+    vault.write = async (p: string, c: string) => {
+      if (p === todayPath && blocked) throw new Error("disk busy");
+      return write(p, c);
+    };
+    const engine = new Engine(vault, settings, async () => {});
+
+    await expect(withFixedToday("2026-09-18", () => engine.createForToday())).rejects.toThrow("disk busy");
+    expect(settings.lastRunDate).toBeNull();
+
+    blocked = false;
+    const res = await withFixedToday("2026-09-18", () => engine.createForToday());
+    expect(res.status).toBe("created");
+    expect(settings.lastRunDate).toBe("2026-09-18");
+    const sum = vault.peek(monthlySummaryPath(fromIsoDate("2026-09-17"), settings))!;
+    expect(sum.split("\n").filter((l) => l.includes("끝낸 일"))).toHaveLength(1);
+  });
+});
+
+describe("오늘 노트가 이미 있을 때도 대기열은 재시도", () => {
+  it("직접 만든 오늘 노트가 있어도 대기열을 처리하고 요약 숫자도 맞춘다", async () => {
+    const vault = new InMemoryVault();
+    const settings = makeSettings();
+    vault.seed(dailyNotePath(fromIsoDate("2026-09-18"), settings), "사용자가 직접 만든 노트");
+    await enqueue(
+      {
+        target: "summary",
+        eventType: "completed",
+        eventDate: "2026-09-17",
+        targetPath: monthlySummaryPath(fromIsoDate("2026-09-17"), settings),
+        block: makeBlock({ topText: "밀린 완료" }),
+        occurrence: 1,
+      },
+      vault,
+      settings,
+    );
+    const res = await withFixedToday("2026-09-18", () => new Engine(vault, settings, async () => {}).createForToday());
+    expect(res.status).toBe("skipped_exists");
+    expect(vault.exists(pendingQueuePath(settings))).toBe(false);
+    const sum = vault.peek(monthlySummaryPath(fromIsoDate("2026-09-17"), settings))!;
+    expect(sum).toContain("- 09-17 밀린 완료 (당일)");
+    expect(sum).toContain("- 완료: 1건");
+  });
+});
+

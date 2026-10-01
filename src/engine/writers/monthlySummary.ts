@@ -10,7 +10,8 @@ import type { DailyNoteSettings } from "../../settings";
 import type { TaskBlock } from "../types";
 import type { VaultLike } from "../vault";
 
-export type SummaryEventType = "completed" | "dropped" | "archived";
+export type { EventType as SummaryEventType } from "../types";
+import type { EventType as SummaryEventType } from "../types";
 
 const WEEK_HEADER_RE = /^## (\d+)주차 \(\d{2}-\d{2} ~ \d{2}-\d{2}\)$/;
 const EVENT_LINE_RE = /^- (\d{2}-\d{2}) (.+)$/;
@@ -63,6 +64,8 @@ export async function appendEvent(
   eventDate: Date,
   block: TaskBlock,
   vault: VaultLike,
+  /** 같은 실행에서 같은 줄로 나온 몇 번째 이벤트인지(1부터). */
+  occurrence: number = 1,
 ): Promise<void> {
   const line = formatEventLine(eventType, eventDate, block);
   const raw = await vault.read(summaryPath);
@@ -72,9 +75,10 @@ export async function appendEvent(
   if (found === null) {
     throw new Error(`Cannot find week ${wk} + ${eventType} section in ${summaryPath}`);
   }
-  // 같은 날짜·같은 항목 줄이 이미 있으면 다시 쓰지 않는다. 같은 날을 재생성하거나
-  // 대기열이 부분 성공 후 재시도돼도 기록이 두 번 쌓이지 않게 하는 멱등성 장치.
-  if (found.duplicate) return;
+  // 같은 줄이 이미 occurrence 개 이상 있으면 다시 쓰지 않는다. 같은 날을 재생성하거나
+  // 대기열이 부분 성공 후 재시도돼도 기록이 두 번 쌓이지 않고, 이름이 같은 서로 다른
+  // 항목(같은 실행에서 1번째·2번째)은 각각 남는다.
+  if (found.sameLines >= occurrence) return;
   const insertIdx = found.index;
   lines.splice(insertIdx, 0, line);
   if (insertIdx + 1 < lines.length && /^(### |## )/.test(lines[insertIdx + 1])) {
@@ -88,16 +92,16 @@ function findInsertionIndex(
   wk: number,
   eventType: SummaryEventType,
   eventLine: string,
-): { index: number; duplicate: boolean } | null {
+): { index: number; sameLines: number } | null {
   const subsectionHeader = subsectionHeaderOf(eventType);
   let inWeek = false;
   let inSub = false;
   let subHeaderIdx: number | null = null;
   let lastEventIdx: number | null = null;
-  let duplicate = false;
+  let sameLines = 0;
   const done = (boundaryIdx: number) => ({
     index: resolveInsert(subHeaderIdx, lastEventIdx, boundaryIdx),
-    duplicate,
+    sameLines,
   });
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -119,7 +123,7 @@ function findInsertionIndex(
     }
     if (inSub && EVENT_LINE_RE.test(line)) {
       lastEventIdx = i;
-      if (line === eventLine) duplicate = true;
+      if (line === eventLine) sameLines++;
     }
   }
   if (inSub) return done(lines.length);

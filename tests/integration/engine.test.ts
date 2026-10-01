@@ -8,30 +8,9 @@ import { CARRYOVER_SEPARATOR } from "../../src/engine/constants";
 import { fromIsoDate, toIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
-import { makeDailyNoteMd, makeLegacyDailyNoteMd, makeSettings } from "../helpers/fixtures";
+import { carriedNames, makeDailyNoteMd, makeLegacyDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-/**
- * Engine 은 내부에서 todayDate() 를 호출한다. 테스트 결정성을 위해 시스템 시각을 고정.
- */
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(
   vault: InMemoryVault,
@@ -114,7 +93,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).not.toMatch(/^- \[ \] Old task/m);
+      expect(carriedNames(todayMd).some((n) => n.includes("Old task"))).toBe(false);
       // 어제(9/14) 가 속한 달의 드롭 문서에 기록
       const dropPath = "Notes/2026-09/2026-09 드롭.md";
       expect(vault.exists(dropPath)).toBe(true);

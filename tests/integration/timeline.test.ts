@@ -11,25 +11,7 @@ import { fromIsoDate, toIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function seedSummary(vault: InMemoryVault, month: Date, body: string): void {
   const path = monthlySummaryPath(month, makeSettings());

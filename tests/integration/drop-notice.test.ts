@@ -20,25 +20,7 @@ import { dailyNotePath, monthlyDropPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 async function run(
   lastIso: string,
@@ -49,7 +31,7 @@ async function run(
   const vault = new InMemoryVault();
   const settings = makeSettings({ lastRunDate: lastIso, ...overrides });
   vault.seed(dailyNotePath(fromIsoDate(lastIso), settings), makeDailyNoteMd({ date: lastIso, ...note }));
-  await withFixedToday(todayIso, () => new Engine(vault, settings, async () => {}).runDaily());
+  await withFixedToday(todayIso, () => new Engine(vault, settings, async () => {}).createForToday());
   return { vault, settings, today: vault.peek(dailyNotePath(fromIsoDate(todayIso), settings))! };
 }
 
@@ -68,7 +50,7 @@ describe("오늘 드롭된 업무 — 노트 맨 아래 참고 칸", () => {
     });
     expect(dropSection(r.today)).toEqual([
       "**⏭️ 오늘 드롭된 업무 1건** (이월 5일째 도달 · [[2026-09 드롭]])",
-      "- 보고서 작성 (09-11 시작, 09-17 드롭, 5영업일 이월)",
+      "- 보고서 작성 (09-11 시작, 09-17까지 5일 이월 후 드롭)",
     ]);
   });
 
@@ -93,7 +75,7 @@ describe("오늘 드롭된 업무 — 노트 맨 아래 참고 칸", () => {
     );
     expect(dropSection(r.today)).toEqual([
       "**⏭️ 오늘 드롭된 업무 1건** (이월 3일째 도달 · [[2026-09 드롭]])",
-      "- 짧은 기준 (09-15 시작, 09-17 드롭, 3영업일 이월)",
+      "- 짧은 기준 (09-15 시작, 09-17까지 3일 이월 후 드롭)",
     ]);
   });
 
@@ -101,7 +83,7 @@ describe("오늘 드롭된 업무 — 노트 맨 아래 참고 칸", () => {
     const r = await run("2026-09-17", "2026-09-18", {
       carryoverLines: ["- [ ] 오래 묵은 일 (⏰ 6일째 이월, 09-09~)"],
     });
-    expect(dropSection(r.today)![1]).toBe("- 오래 묵은 일 (09-09 시작, 09-17 드롭, 7영업일 이월)");
+    expect(dropSection(r.today)![1]).toBe("- 오래 묵은 일 (09-09 시작, 09-17까지 7일 이월 후 드롭)");
   });
 
   it("직접 [-] 로 지운 항목은 보여주지 않는다", async () => {
@@ -136,10 +118,18 @@ describe("오늘 드롭된 업무 — 노트 맨 아래 참고 칸", () => {
     });
     expect(dropSection(r.today)).toEqual([
       "**⏭️ 오늘 드롭된 업무 3건** (이월 5일째 도달 · [[2026-05 드롭]] · [[2026-06 드롭]])",
-      "- 5월 드롭 (05-25 시작, 05-29 드롭, 5영업일 이월)",
-      "- 6월 초 드롭 (05-27 시작, 06-02 드롭, 5영업일 이월)",
-      "- 6월 드롭 (05-29 시작, 06-04 드롭, 5영업일 이월)",
+      "- 5월 드롭 (05-25 시작, 05-29까지 5일 이월 후 드롭)",
+      "- 6월 초 드롭 (05-27 시작, 06-02까지 5일 이월 후 드롭)",
+      "- 6월 드롭 (05-29 시작, 06-04까지 5일 이월 후 드롭)",
     ]);
+  });
+
+  it("항목 이름이 `[ ]` 로 시작해도 참고 칸에서 체크박스로 보이지 않게 대괄호를 이스케이프한다", async () => {
+    const r = await run("2026-09-17", "2026-09-18", {
+      carryoverLines: ["- [ ] [ ] 이상한 이름 (⏰ 4일째 이월, 09-11~)"],
+    });
+    const sec = dropSection(r.today)!;
+    expect(sec[1]).toBe("- \\[ ] 이상한 이름 (09-11 시작, 09-17까지 5일 이월 후 드롭)");
   });
 
   it("다음 날 처리에 영향이 없다: 칸이 있는 노트를 다시 읽어도 이월·할일에 끼어들지 않고, 다음 날엔 칸이 사라진다", async () => {
@@ -150,7 +140,7 @@ describe("오늘 드롭된 업무 — 노트 맨 아래 참고 칸", () => {
     expect(parsed.carryoverBlocks.map((b) => b.topText)).toEqual(["남는 일"]);
     expect(parsed.memoLines).toEqual([]);
 
-    await withFixedToday("2026-09-21", () => new Engine(r.vault, r.settings, async () => {}).runDaily());
+    await withFixedToday("2026-09-21", () => new Engine(r.vault, r.settings, async () => {}).createForToday());
     const next = r.vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), r.settings))!;
     expect(dropSection(next)).toBeNull();
     // 09-18(금) 노트에 2일째 → 09-21(월) 은 평일 하루 뒤라 3일째.

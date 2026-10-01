@@ -76,11 +76,23 @@ export function mmddOf(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 시작 연도를 찾을 때 거슬러 볼 최대 햇수. 윤년 주기(4년)의 두 배라 02-29 도 찾는다. */
+const ORIGIN_YEAR_SEARCH_LIMIT = 8;
 /**
- * 이월 태그에서 파싱한 MM-DD 로 원본 연도를 유추.
- * 태그에는 연도가 없으므로 note_date 기준으로 판단한다.
- * N일째 이월이면 이월 한 번마다 최소 하루가 지났으므로 시작일은 note_date 보다 최소 N일 앞이다.
- * 그 조건을 만족하는 가장 최근의 MM-DD 를 고른다. 1년 넘게 이월된 #장기 항목도 올바른 해가 나온다.
+ * 이월 1일이 달력으로 대략 며칠인지. 주말 제외(영업일 5일 = 달력 7일, 1.4)와
+ * 주말 포함(1.0)의 중간값을 써서 두 설정 모두 약 2.5년 이월까지 오차가 반년 안에 든다.
+ */
+const CALENDAR_DAYS_PER_CARRYOVER_DAY = 1.2;
+
+/**
+ * 이월 태그에서 파싱한 MM-DD 로 원본 연도를 유추한다. 태그에는 연도가 없다.
+ * 이월 일수로 시작일을 대략 추정하고(note_date − 일수 × 1.2일), note_date 이전의 MM-DD 가운데
+ * 그 추정치에 가장 가까운 해를 고른다.
+ * - 1년 넘게 이월된 #장기 항목도 올바른 해가 나온다.
+ * - 태그 일수가 실제 경과와 하루 이틀 어긋나도(손편집·예전 버전) 해를 잘못 넘기지 않는다.
+ * - 02-29 처럼 그해에 없는 날짜는 다음 달로 넘어가 버리므로(3월 1일) 그런 해는 건너뛴다.
+ * - 02-31 처럼 어느 해에도 없는 날짜는 후보가 없으므로, note_date 이전의 가장 최근 MM-DD
+ *   (Date 가 넘겨 준 날짜)로 돌아간다.
  */
 export function resolveOriginDate(
   noteDate: Date,
@@ -88,16 +100,18 @@ export function resolveOriginDate(
   dd: number,
   carryoverDays: number = 0,
 ): Date {
-  const latest = addDays(noteDate, -carryoverDays);
-  // 02-29 처럼 그해에 없는 날짜는 다음 달로 넘어가 버리므로(3월 1일) 그런 해는 건너뛴다.
-  // 사용자가 02-31 같은 존재하지 않는 날짜를 적으면 어느 해도 맞지 않으므로 최대 8년만 거슬러 본다
-  // (윤년 주기 4년의 두 배). 못 찾으면 예전 규칙(가장 최근의 같은 MM-DD)으로 돌아간다.
-  for (let y = latest.getFullYear(); y > latest.getFullYear() - 8; y--) {
+  const estimate = addDays(noteDate, -Math.round(carryoverDays * CALENDAR_DAYS_PER_CARRYOVER_DAY));
+  let best: Date | null = null;
+  const y0 = noteDate.getFullYear();
+  for (let y = y0; y > y0 - ORIGIN_YEAR_SEARCH_LIMIT; y--) {
     const candidate = new Date(y, mm - 1, dd);
-    if (candidate <= latest && candidate.getMonth() === mm - 1) return candidate;
+    if (candidate.getMonth() !== mm - 1 || candidate > noteDate) continue;
+    const dist = Math.abs(candidate.getTime() - estimate.getTime());
+    if (best === null || dist < Math.abs(best.getTime() - estimate.getTime())) best = candidate;
   }
-  const fallback = new Date(noteDate.getFullYear(), mm - 1, dd);
-  return fallback > noteDate ? new Date(noteDate.getFullYear() - 1, mm - 1, dd) : fallback;
+  if (best !== null) return best;
+  const fallback = new Date(y0, mm - 1, dd);
+  return fallback > noteDate ? new Date(y0 - 1, mm - 1, dd) : fallback;
 }
 
 /** JS weekday: Sun=0..Sat=6 → 월요일 기반: Mon=0..Sun=6 */

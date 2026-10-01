@@ -189,7 +189,20 @@ describe("resolveOriginDate — 이월 일수로 연도 결정 (1년 넘는 이�
     expect(toIsoDate(resolveOriginDate(d("2026-10-01"), 9, 1, 283))).toBe("2025-09-01");
   });
 
-  it("일수가 짧으면 기존과 같다 (5일째, 09-16 → 같은 해)", () => {
+  it("매일 이월된 경우의 경계: 시작일이 정확히 (노트 날짜 − 일수) 여도 같은 해 (1일째, 09-17 노트 09-18)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-09-18"), 9, 17, 1))).toBe("2026-09-17");
+  });
+
+  it("태그 일수가 실제 경과보다 하루 이틀 많아도(손편집·예전 버전) 해를 잘못 넘기지 않는다 (01-02 노트, 4일째, 12-30 → 작년 12-30)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-01-02"), 12, 30, 4))).toBe("2025-12-30");
+    expect(toIsoDate(resolveOriginDate(d("2026-09-18"), 9, 17, 3))).toBe("2026-09-17");
+  });
+
+  it("주말 제외를 끈 사용자(달력일로 센 600일째)도 같은 규칙으로 맞는 해가 나온다 (2026-10-01, 600일째, 02-08 → 2025-02-08)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-10-01"), 2, 8, 600))).toBe("2025-02-08");
+  });
+
+  it("일수가 짧으면 기존과 같다 (3일째, 09-16 → 같은 해)", () => {
     expect(toIsoDate(resolveOriginDate(d("2026-09-21"), 9, 16, 3))).toBe("2026-09-16");
   });
 
@@ -198,8 +211,11 @@ describe("resolveOriginDate — 이월 일수로 연도 결정 (1년 넘는 이�
   });
 
   it("어느 해에도 없는 날짜(02-31, 13-45)를 손으로 적어도 멈추지 않고 결과를 낸다", () => {
-    expect(resolveOriginDate(d("2026-10-01"), 2, 31, 5)).toBeInstanceOf(Date);
-    expect(resolveOriginDate(d("2026-10-01"), 13, 45, 5)).toBeInstanceOf(Date);
+    for (const [mm, dd] of [[2, 31], [13, 45]]) {
+      const r = resolveOriginDate(d("2026-10-01"), mm, dd, 5);
+      expect(Number.isNaN(r.getTime())).toBe(false);
+      expect(r <= d("2026-10-01")).toBe(true);
+    }
   });
 
   it("2년 넘게도 해석한다 (600일째, 09-01 → 2년 전)", () => {

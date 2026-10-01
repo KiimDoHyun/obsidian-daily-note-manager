@@ -20,25 +20,7 @@ import {
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(
   vault: InMemoryVault,
@@ -145,7 +127,7 @@ describe("대기 큐 — 통합 시나리오", () => {
       expect(queue.length).toBe(1);
       expect(queue[0].eventType).toBe("completed");
       expect(queue[0].block.topText).toBe("완료 항목");
-      expect(queue[0].targetSummaryPath).toBe(summaryPath);
+      expect(queue[0].targetPath).toBe(summaryPath);
     });
   });
 
@@ -336,7 +318,7 @@ describe("대기 큐 — 통합 시나리오", () => {
     expect(remaining[0].block.topText).toBe("10월 항목");
   });
 
-  it("runDaily: 며칠 비웠다 돌아와도 큐가 소진되고 오늘 노트가 생긴다", async () => {
+  it("며칠 비웠다 돌아와도 큐가 소진되고 오늘 노트가 생긴다", async () => {
     // 준비: 09-11(금) lastRunDate, 09-14(월) 노트 시드, today = 09-16(수)
     await withFixedToday("2026-09-16", async () => {
       const { engine, settings } = makeEngine(vault, {
@@ -386,7 +368,7 @@ describe("대기 큐 — 통합 시나리오", () => {
       ].join("\n");
       vault.seed(pendingQueuePath(settings), queueContent);
 
-      await engine.runDaily();
+      await engine.createForToday();
 
       // 큐가 소진되어 파일이 사라졌는지
       expect(vault.exists(pendingQueuePath(settings))).toBe(false);

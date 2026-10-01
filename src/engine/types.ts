@@ -43,3 +43,15 @@ export function makeBlock(overrides: Partial<TaskBlock> & { topText: string }): 
     ...overrides,
   };
 }
+
+export type EventType = "completed" | "dropped" | "archived";
+
+/**
+ * 발생 날짜가 붙은 이벤트. 날짜가 곧 기록될 달 문서를 정한다.
+ * 날짜는 그 항목이 마지막으로 노트에 있었던 날이다(드롭이면 드롭되기 직전 날).
+ */
+export interface DatedEvent {
+  eventType: EventType;
+  date: Date;
+  block: TaskBlock;
+}

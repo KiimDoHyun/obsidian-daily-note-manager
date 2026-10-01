@@ -2,7 +2,7 @@
  * 플러그인 시작 시뮬레이션 — 실제 옵시디언을 켜지 않고 onload 전체 흐름을 돌린다.
  *
  * 엔진만 따로 검증하는 다른 테스트와 달리, 여기서는 실제 코드 경로 그대로 간다.
- *   onload → 레이아웃 준비 신호 → 스케줄러 첫 tick → plugin.runDaily → engine.runDaily
+ *   onload → 레이아웃 준비 신호 → 스케줄러 첫 tick → engine.createForToday
  *   → VaultAdapter(실제 어댑터) → 가짜 Obsidian Vault API
  *
  * 가짜 Vault 는 실제 옵시디언이 엄격하게 구는 지점을 그대로 흉내 낸다.
@@ -12,30 +12,13 @@
  * 날짜는 Date 를 고정해 흉내 내므로 "휴가 다녀온 월요일" 같은 상황도 즉시 재현된다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as obsidian from "obsidian";
 import { TFile, TFolder } from "obsidian";
 import { fromIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 /** 실제 옵시디언 Vault API 의 엄격한 동작을 흉내 내는 가짜. */
 class FakeObsidianVault {
@@ -143,6 +126,7 @@ describe("플러그인 시작 시뮬레이션 (onload → 스케줄러 → 엔�
   });
   afterEach(() => {
     delete (globalThis as unknown as { window?: unknown }).window;
+    vi.restoreAllMocks();
   });
 
   it("레이아웃 준비 전에는 아무 파일도 쓰지 않는다", async () => {
@@ -237,4 +221,49 @@ describe("플러그인 시작 시뮬레이션 (onload → 스케줄러 → 엔�
       expect(h.vault.files.get(dailyNotePath(fromIsoDate("2026-09-21"), s))!).toContain("업무A (⏰ 3일째 이월, 09-16~)");
     });
   });
+
+  it("오늘 노트 자동 생성이 실패하면 알림을 날짜당 한 번만 띄우고, 다음 tick 에 다시 시도한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const notices: string[] = [];
+    vi.spyOn(obsidian, "Notice").mockImplementation(
+      // @ts-expect-error 반환 타입은 Notice 지만 테스트에서 참조 안 함
+      (msg: string) => {
+        notices.push(msg);
+        return {};
+      },
+    );
+    let intervalCb: (() => void) | null = null;
+    (globalThis as unknown as { window: unknown }).window = {
+      setInterval: (cb: () => void) => {
+        intervalCb = cb;
+        return 1;
+      },
+    };
+    await withFixedToday("2026-09-18", async () => {
+      const s = makeSettings();
+      const h = await bootPlugin({ lastRunDate: "2026-09-17" }, () => {});
+      const todayPath = dailyNotePath(fromIsoDate("2026-09-18"), s);
+      const create = h.vault.create.bind(h.vault);
+      let blocked = true;
+      h.vault.create = async (p: string, c: string) => {
+        if (p === todayPath && blocked) throw new Error("disk busy");
+        return create(p, c);
+      };
+
+      h.layoutReady();
+      await settle();
+      intervalCb!();
+      await settle();
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toContain("disk busy");
+      expect(h.vault.files.has(todayPath)).toBe(false);
+
+      blocked = false;
+      intervalCb!();
+      await settle();
+      expect(h.vault.files.has(todayPath)).toBe(true);
+      expect(notices).toHaveLength(1);
+    });
+  });
 });
+

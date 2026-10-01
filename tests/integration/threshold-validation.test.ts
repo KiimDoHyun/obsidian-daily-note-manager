@@ -19,6 +19,7 @@ import { dailyNotePath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import * as obsidian from "obsidian";
+import { withFixedToday } from "../helpers/fixedDate";
 
 /**
  * Notice 는 new 로만 호출되는 클래스. vi.spyOn 은 함수로 갈아치우면서 constructor 호환성이
@@ -135,25 +136,6 @@ describe("plugin.saveData — 무효 조합 저장 시 자동 정정", () => {
     expect(updateSpy).not.toHaveBeenCalled();
   });
 });
-
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
 
 describe("정정된 값이 엔진 경고 로직에서 정상 작동", () => {
   it("리셋 후 값(drop=5, orange=2, red=1) → 5일 이월 태스크가 3일째 🟠, 4일째 🔴 로 뜬다", async () => {

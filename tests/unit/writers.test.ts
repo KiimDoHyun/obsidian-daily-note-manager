@@ -105,6 +105,28 @@ describe("monthlyDrop — 형식과 중복 방지", () => {
   });
 });
 
+describe("monthlyDrop — 같은 항목이라도 날짜가 다르면 각각 기록", () => {
+  it("되살렸다가 일주일 뒤 다시 드롭하면 두 번 남는다", async () => {
+    const vault = new InMemoryVault();
+    const path = await ensureDrop(d("2026-09-01"), vault, settings);
+    const block = makeBlock({ topText: "다시 버린 일", isDroppedImmediate: true });
+    await appendDropped(path, d("2026-09-15"), block, vault);
+    await appendDropped(path, d("2026-09-22"), block, vault);
+    expect(vault.peek(path)!.split("\n").filter((l) => l.startsWith("- [-] 다시 버린 일"))).toHaveLength(2);
+  });
+});
+
+describe("archive — 같은 항목이라도 날짜가 다르면 각각 기록", () => {
+  it("다른 날 다시 보관하면 두 번 남는다", async () => {
+    const vault = new InMemoryVault();
+    const path = await ensureArchive(vault, settings);
+    const block = makeBlock({ topText: "다시 보관" });
+    await appendArchived(path, d("2026-09-15"), block, vault);
+    await appendArchived(path, d("2026-09-22"), block, vault);
+    expect(vault.peek(path)!.split("\n").filter((l) => l.startsWith("- [ ] 다시 보관"))).toHaveLength(2);
+  });
+});
+
 describe("archive — 월별 묶음과 중복 방지", () => {
   it("같은 달은 한 묶음 끝에 이어 붙이고, 새 달은 새 묶음을 만든다", async () => {
     const vault = new InMemoryVault();

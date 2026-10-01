@@ -32,12 +32,14 @@ export async function appendDropped(
   eventDate: Date,
   block: TaskBlock,
   vault: VaultLike,
+  /** 같은 실행에서 같은 줄로 나온 몇 번째 드롭인지(1부터). */
+  occurrence: number = 1,
 ): Promise<void> {
   const raw = await vault.read(dropPath);
   const lines = raw.split(/\r?\n/);
   const top = renderDropTop(block, eventDate);
-  // 같은 날짜에 드롭된 같은 항목이 이미 있으면 다시 쓰지 않는다 (재생성·재시도 멱등성).
-  if (lines.includes(top)) return;
+  // 같은 줄이 이미 occurrence 개 이상 있으면 다시 쓰지 않는다 (재생성·재시도 멱등성).
+  if (lines.filter((l) => l === top).length >= occurrence) return;
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
   const hasPrior = lines.some((l) => l.startsWith("- [-] "));
   if (!hasPrior) lines.push("");
