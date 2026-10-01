@@ -30,6 +30,9 @@ export const DROP_THRESHOLD_DAYS = 5;
 export const WARN_ORANGE_DAY = 3;
 export const WARN_RED_DAY = 4;
 
+// 노트 맨 아래 "오늘 드롭된 업무" 참고 칸의 제목 앞머리. 굵은 글씨라 목차(아웃라인)에는 뜨지 않는다.
+export const DROPPED_TODAY_TITLE = "⏭️ 오늘 드롭된 업무";
+
 export const SUMMARY_HEADER_START = "## 📈 이번 달 요약";
 export const SUMMARY_COMPLETED_HEADER = "### ✅ 완료";
 export const SUMMARY_DROPPED_HEADER = "### ⏭️ 드롭";
@@ -38,7 +41,7 @@ export const SUMMARY_ARCHIVED_HEADER = "### 📦 보관 이동";
 export const FOOTER_TEMPLATE = `---
 📎 마커 예시 (할일 라인에 그대로 붙임):
 \`\`\`
-- [ ] 할일 텍스트 #장기    → 5일 드롭 규칙 면제, 무한 이월
+- [ ] 할일 텍스트 #장기    → {drop_days}일 드롭 규칙 면제, 무한 이월
 - [ ] 할일 텍스트 #보관    → 다음 날 보관함으로 이동
 - [-] 할일 텍스트          → 다음 날 즉시 드롭 (체크박스를 [-] 로 변경)
 \`\`\`

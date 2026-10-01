@@ -6,27 +6,9 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Scheduler } from "../../src/scheduler";
-import type { Engine } from "../../src/engine";
+import type { DailyRunner } from "../../src/scheduler";
 import type { Plugin } from "obsidian";
-
-function withFixedDate<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday as withFixedDate } from "../helpers/fixedDate";
 
 function mockPlugin(): Plugin {
   return { registerInterval: () => {} } as unknown as Plugin;
@@ -47,10 +29,10 @@ describe("Scheduler.tick — 하루 한 번 게이트", () => {
     errorSpy.mockRestore();
   });
 
-  it("같은 날 tick 을 여러 번 호출해도 engine.createForToday 는 한 번만 호출", async () => {
+  it("같은 날 tick 을 여러 번 호출해도 runner.createForToday 는 한 번만 호출", async () => {
     await withFixedDate("2026-09-15", async () => {
       const create = vi.fn().mockResolvedValue({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const scheduler = new Scheduler(engine, mockPlugin());
 
       await tick(scheduler);
@@ -63,7 +45,7 @@ describe("Scheduler.tick — 하루 한 번 게이트", () => {
 
   it("자정 넘겨 날짜가 바뀌면 다시 실행", async () => {
     const create = vi.fn().mockResolvedValue({ status: "created" });
-    const engine = { createForToday: create } as unknown as Engine;
+    const engine = { createForToday: create } as unknown as DailyRunner;
     const scheduler = new Scheduler(engine, mockPlugin());
 
     await withFixedDate("2026-09-15", async () => {
@@ -84,7 +66,7 @@ describe("Scheduler.tick — 하루 한 번 게이트", () => {
         .fn()
         .mockRejectedValueOnce(new Error("transient failure"))
         .mockResolvedValueOnce({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const scheduler = new Scheduler(engine, mockPlugin());
 
       await tick(scheduler); // 첫 시도 실패 (catch)
@@ -99,7 +81,7 @@ describe("Scheduler.tick — 하루 한 번 게이트", () => {
     // "성공했다면 두 번 부르지 않는다" 는 규칙이 실패 복원과 상충하지 않는지 확인.
     await withFixedDate("2026-09-15", async () => {
       const create = vi.fn().mockResolvedValue({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const scheduler = new Scheduler(engine, mockPlugin());
 
       await tick(scheduler); // 성공
@@ -120,7 +102,7 @@ describe("Scheduler.tick — 열린 편집기 flush", () => {
     errorSpy.mockRestore();
   });
 
-  it("engine.createForToday 전에 열린 마크다운 뷰의 save 를 호출한다", async () => {
+  it("runner.createForToday 전에 열린 마크다운 뷰의 save 를 호출한다", async () => {
     await withFixedDate("2026-09-15", async () => {
       const order: string[] = [];
       const save = vi.fn().mockImplementation(async () => {
@@ -130,7 +112,7 @@ describe("Scheduler.tick — 열린 편집기 flush", () => {
         order.push("create");
         return { status: "created" };
       });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const plugin = {
         registerInterval: () => {},
         app: {
@@ -154,7 +136,7 @@ describe("Scheduler.tick — 열린 편집기 flush", () => {
     await withFixedDate("2026-09-15", async () => {
       const save = vi.fn().mockRejectedValue(new Error("boom"));
       const create = vi.fn().mockResolvedValue({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const plugin = {
         registerInterval: () => {},
         app: {
@@ -174,7 +156,7 @@ describe("Scheduler.tick — 열린 편집기 flush", () => {
   it("plugin.app 이 없어도 조용히 스킵", async () => {
     await withFixedDate("2026-09-15", async () => {
       const create = vi.fn().mockResolvedValue({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const scheduler = new Scheduler(engine, mockPlugin());
 
       await tick(scheduler);
@@ -197,7 +179,7 @@ describe("Scheduler.start — 초기 tick 즉시 실행 + 인터벌 등록", () 
 
     await withFixedDate("2026-09-15", async () => {
       const create = vi.fn().mockResolvedValue({ status: "created" });
-      const engine = { createForToday: create } as unknown as Engine;
+      const engine = { createForToday: create } as unknown as DailyRunner;
       const scheduler = new Scheduler(engine, plugin);
       scheduler.start();
       // start 내부의 `void this.tick()` 이 마이크로태스크로 실행되므로 한 틱 양보.

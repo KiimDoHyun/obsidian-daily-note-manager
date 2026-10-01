@@ -19,7 +19,7 @@ export async function ensureDrop(
     "",
     `# ${ym} 드롭된 업무`,
     "",
-    "> 5일 초과 이월 또는 즉시 드롭(`[-]`) 처리된 항목.",
+    `> 이월 ${settings.dropThresholdDays}일째에 도달했거나 즉시 드롭(\`[-]\`) 처리된 항목.`,
     "> 살리려면 항목 텍스트만 복사해서 오늘 데일리의 `할일` 섹션에 붙여넣기 (이월 태그 제거).",
     "",
   ];
@@ -32,13 +32,18 @@ export async function appendDropped(
   eventDate: Date,
   block: TaskBlock,
   vault: VaultLike,
+  /** 같은 실행에서 같은 줄로 나온 몇 번째 드롭인지(1부터). */
+  occurrence: number = 1,
 ): Promise<void> {
   const raw = await vault.read(dropPath);
   const lines = raw.split(/\r?\n/);
+  const top = renderDropTop(block, eventDate);
+  // 같은 줄이 이미 occurrence 개 이상 있으면 다시 쓰지 않는다 (재생성·재시도 멱등성).
+  if (lines.filter((l) => l === top).length >= occurrence) return;
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
   const hasPrior = lines.some((l) => l.startsWith("- [-] "));
   if (!hasPrior) lines.push("");
-  lines.push(renderDropTop(block, eventDate));
+  lines.push(top);
   for (const child of block.children) lines.push(child);
   await vault.write(dropPath, lines.join("\n") + "\n");
 }

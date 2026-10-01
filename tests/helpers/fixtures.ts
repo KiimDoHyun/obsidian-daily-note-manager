@@ -1,4 +1,6 @@
 import { DEFAULT_SETTINGS, type DailyNoteSettings } from "../../src/settings";
+import { fromIsoDate } from "../../src/engine/dateutil";
+import { parseDailyNoteText } from "../../src/engine/parser";
 
 export function makeSettings(overrides: Partial<DailyNoteSettings> = {}): DailyNoteSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
@@ -65,4 +67,18 @@ export function makeLegacyDailyNoteMd(opts: {
     "## 💬 메모",
     "",
   ].join("\n");
+}
+
+/**
+ * 노트를 실제 파서로 다시 읽어 할일·이월 항목의 이름만 뽑는다.
+ * "이 항목이 오늘로 넘어왔는가/안 넘어왔는가" 를 줄 모양(체크박스 문자·접두 기호)에
+ * 기대지 않고 확인하기 위한 도구. 노트 맨 아래 드롭 참고 칸은 파서가 읽지 않으므로 섞이지 않는다.
+ */
+export function carriedNames(noteMd: string, isoDate?: string): string[] {
+  // 날짜를 안 주면 노트 머리말(date: YYYY-MM-DD)에서 읽는다. 이름만 볼 때는 날짜가 결과에 영향이 없다.
+  const iso = isoDate ?? /^date: (\d{4}-\d{2}-\d{2})$/m.exec(noteMd)?.[1] ?? "2026-01-01";
+  const parsed = parseDailyNoteText(noteMd, fromIsoDate(iso));
+  return [...parsed.activeBlocks, ...parsed.carryoverBlocks]
+    .map((b) => b.topText)
+    .filter((t) => t.trim() !== "");
 }

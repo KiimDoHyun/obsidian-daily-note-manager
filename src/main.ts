@@ -2,7 +2,7 @@ import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS, DailyNoteSettings, DailyNoteSettingTab } from "./settings";
 import { registerCommands } from "./commands";
 import { Scheduler } from "./scheduler";
-import { Engine, CatchUpError } from "./engine";
+import { Engine } from "./engine";
 import { VaultAdapter } from "./engine/vault";
 import { resolveLocale, t } from "./i18n";
 import { TIMELINE_VIEW_TYPE, TimelineView } from "./view/timelineView";
@@ -20,13 +20,8 @@ export default class DailyNoteManagerPlugin extends Plugin {
    * 강제 재렌더해 정정된 값을 즉시 반영하기 위해 저장해 둔다.
    */
   settingTab: DailyNoteSettingTab | null = null;
-  /**
-   * catchUp 실패 알림의 중복 방지용. 세션 메모리 전용 — persist 하지 않는다.
-   * 같은 날짜에 대한 재시도가 계속 실패해도 Notice 는 세션당 한 번만 뜬다.
-   * 실패 날짜가 바뀌거나 플러그인이 다시 로드되면 다시 알린다.
-   */
-  private lastCatchUpFailureDate: string | null = null;
-
+  /** 자동 생성 실패 알림의 중복 방지용(세션 메모리 전용). */
+  private lastNotifiedFailureDate: string | null = null;
   async onload() {
     await this.loadSettings();
 
@@ -54,34 +49,23 @@ export default class DailyNoteManagerPlugin extends Plugin {
       callback: () => this.activateTimelineView(),
     });
 
-    this.scheduler = new Scheduler(this.engine, this);
-    this.scheduler.start();
-
+    // 자동 생성은 스케줄러가 맡는다. 첫 tick 이 오늘 노트를 만든다.
+    // 볼트 파일 목록이 다 올라온 뒤 시작해야 "이미 있는 노트" 판정이 정확하다.
+    this.scheduler = new Scheduler(this.engine, this, (err, iso) => this.notifyAutoCreateFailure(err, iso));
     this.app.workspace.onLayoutReady(() => {
-      void this.runCatchUp();
+      this.scheduler.start();
     });
   }
 
   /**
-   * catchUp 을 래핑해 실패 시 사용자에게 Notice 로 알린다.
-   * 같은 실패 날짜에 대해서는 세션당 한 번만 알린다(dedupe).
-   * 성공하면 dedupe 상태를 리셋해 다음 실패 때 즉시 다시 알린다.
+   * 자동 생성 실패를 사용자에게 알린다. 스케줄러가 1분마다 재시도하므로 같은 날짜에 대해서는
+   * 세션당 한 번만 띄운다. 날짜가 바뀌거나 플러그인을 다시 켜면 다시 알린다.
    */
-  async runCatchUp(): Promise<void> {
-    try {
-      await this.engine.catchUp();
-      this.lastCatchUpFailureDate = null;
-    } catch (err) {
-      if (err instanceof CatchUpError) {
-        console.error("[daily-note] catchUp failed at", err.failedDate, err.cause);
-        if (this.lastCatchUpFailureDate !== err.failedDate) {
-          this.lastCatchUpFailureDate = err.failedDate;
-          new Notice(formatCatchUpFailureMessage(err.failedDate), 10000);
-        }
-      } else {
-        console.error("[daily-note] catchUp failed", err);
-      }
-    }
+  private notifyAutoCreateFailure(err: unknown, todayIso: string): void {
+    if (this.lastNotifiedFailureDate === todayIso) return;
+    this.lastNotifiedFailureDate = todayIso;
+    const lc = resolveLocale(this.settings.language);
+    new Notice(t("noticeAutoCreateFailed", lc, { msg: (err as Error)?.message ?? String(err) }), 10000);
   }
 
   onunload() {
@@ -89,8 +73,10 @@ export default class DailyNoteManagerPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const data = (await this.loadData()) as Partial<DailyNoteSettings> | null;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
+    const data = (await this.loadData()) as (Partial<DailyNoteSettings> & Record<string, unknown>) | null;
+    // 0.2.6 까지 있던 설정(autoRunOnLoad, maxCatchUpDays)은 더 이상 쓰지 않으므로 버린다.
+    const { autoRunOnLoad: _a, maxCatchUpDays: _m, ...rest } = data ?? {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, rest);
   }
 
   async saveSettings() {
@@ -159,20 +145,4 @@ export default class DailyNoteManagerPlugin extends Plugin {
       if (leaf.view instanceof TimelineView) void leaf.view.forceRerender();
     });
   }
-}
-
-/**
- * catchUp 실패 알림 문자열. ISO(YYYY-MM-DD) → "M월 D일" 로 축약.
- * i18n 은 이 한 문장에 대해 오버엔지니어링이라 한국어 고정.
- */
-export function formatCatchUpFailureMessage(failedIsoDate: string): string {
-  const parts = failedIsoDate.split("-");
-  const month = parts.length >= 2 ? parseInt(parts[1], 10) : NaN;
-  const day = parts.length >= 3 ? parseInt(parts[2], 10) : NaN;
-  const label =
-    Number.isFinite(month) && Number.isFinite(day) ? `${month}월 ${day}일` : failedIsoDate;
-  return (
-    `Daily Note Manager: ${label} 노트 생성에 실패했습니다.\n` +
-    `원인 확인 후 명령 팔레트에서 "오늘 노트 강제 생성" 실행.`
-  );
 }

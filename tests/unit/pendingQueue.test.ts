@@ -21,14 +21,16 @@ function block(topText: string, overrides: Partial<TaskBlock> = {}): TaskBlock {
   return makeBlock({ topText, ...overrides });
 }
 
-function entry(overrides: Partial<PendingEntry> = {}): PendingEntry {
+function entry(overrides: Record<string, unknown> = {}): PendingEntry {
   return {
     eventType: "completed",
     eventDate: "2026-09-15",
-    targetSummaryPath: "Notes/2026-09/2026-09 종합.md",
+    target: "summary",
+    targetPath: "Notes/2026-09/2026-09 종합.md",
     block: block("샘플 할일"),
+    occurrence: 1,
     ...overrides,
-  };
+  } as PendingEntry;
 }
 
 describe("pendingQueue — 경로", () => {
@@ -159,7 +161,7 @@ describe("pendingQueue — enqueue", () => {
     await enqueue(
       entry({
         eventDate: "2026-09-30",
-        targetSummaryPath: "Notes/2026-09/2026-09 종합.md",
+        targetPath: "Notes/2026-09/2026-09 종합.md",
         block: block("9월 항목"),
       }),
       vault,
@@ -168,7 +170,7 @@ describe("pendingQueue — enqueue", () => {
     await enqueue(
       entry({
         eventDate: "2026-10-01",
-        targetSummaryPath: "Notes/2026-10/2026-10 종합.md",
+        targetPath: "Notes/2026-10/2026-10 종합.md",
         block: block("10월 항목"),
       }),
       vault,
@@ -176,8 +178,8 @@ describe("pendingQueue — enqueue", () => {
     );
     const back = await readQueue(vault, settings);
     expect(back.length).toBe(2);
-    expect(back[0].targetSummaryPath).toContain("2026-09");
-    expect(back[1].targetSummaryPath).toContain("2026-10");
+    expect(back[0].targetPath).toContain("2026-09");
+    expect(back[1].targetPath).toContain("2026-10");
   });
 });
 
@@ -190,7 +192,7 @@ describe("pendingQueue — drainQueue", () => {
 
   it("큐가 비어있으면 drained=0, remaining=0", async () => {
     const res = await drainQueue(vault, settings);
-    expect(res).toEqual({ drained: 0, remaining: 0 });
+    expect(res).toMatchObject({ drained: 0, remaining: 0 });
   });
 
   it("대상 종합 문서가 정상이면 항목이 소진되고 큐 파일이 사라진다", async () => {
@@ -216,7 +218,7 @@ describe("pendingQueue — drainQueue", () => {
       "",
     ].join("\n");
     vault.seed(summaryPath, summary);
-    await enqueue(entry({ targetSummaryPath: summaryPath }), vault, settings);
+    await enqueue(entry({ targetPath: summaryPath }), vault, settings);
     const res = await drainQueue(vault, settings);
     expect(res.drained).toBe(1);
     expect(res.remaining).toBe(0);
@@ -225,12 +227,25 @@ describe("pendingQueue — drainQueue", () => {
     expect(written).toContain("샘플 할일");
   });
 
-  it("대상 종합 문서가 없거나 깨져 있으면 항목이 큐에 남는다", async () => {
-    await enqueue(entry({ targetSummaryPath: "Notes/nowhere.md" }), vault, settings);
+  it("대상 종합 문서 구조가 깨져 있으면(주차 섹션 없음) 항목이 큐에 남는다", async () => {
+    vault.seed("Notes/nowhere.md", "# 사용자가 구조를 지운 종합 문서\n");
+    await enqueue(entry({ targetPath: "Notes/nowhere.md" }), vault, settings);
     const res = await drainQueue(vault, settings);
     expect(res.drained).toBe(0);
     expect(res.remaining).toBe(1);
     expect(vault.exists(pendingQueuePath(settings))).toBe(true);
+  });
+});
+
+describe("pendingQueue — drainQueue 대상 문서 자동 생성", () => {
+  it("대상 종합 문서가 아예 없으면 새로 만들고 기록한 뒤 큐를 비운다", async () => {
+    const vault = new InMemoryVault();
+    const settings = makeSettings();
+    const path = "Notes/2026-09/2026-09 종합.md";
+    await enqueue(entry({ targetPath: path }), vault, settings);
+    const res = await drainQueue(vault, settings);
+    expect(res).toMatchObject({ drained: 1, remaining: 0 });
+    expect(vault.peek(path)!).toContain("- 09-15 샘플 할일 (당일)");
   });
 });
 

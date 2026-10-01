@@ -46,7 +46,6 @@ const M = {
   },
   longTermLabel: { ko: "[장기]", en: "[Long]" },
   sameDay: { ko: "당일", en: "Same day" },
-  viewDisplayLabel: { ko: "업무 타임라인", en: "Task Timeline" },
 
   // Ribbon
   ribbonOpenTimeline: { ko: "업무 타임라인 열기", en: "Open task timeline" },
@@ -86,6 +85,10 @@ cmdForceDate: {
   noticeCountsKo: {
     ko: "이월 {c} · 완료 {d} · 드롭 {r} · 보관 {a}",
     en: "carried {c} · done {d} · dropped {r} · archived {a}",
+  },
+  noticeAutoCreateFailed: {
+    ko: "Daily Note Manager: 오늘 노트를 자동으로 만들지 못했습니다 ({msg}). 1분마다 다시 시도합니다.",
+    en: "Daily Note Manager: couldn't create today's note automatically ({msg}). Retrying every minute.",
   },
   noticeCreateFailed: { ko: "생성 실패: {msg}", en: "Create failed: {msg}" },
   noticeDryRunSummary: {
@@ -182,16 +185,6 @@ noticeForceFailed: {
   setSkipWeekendDesc: {
     ko: "토·일에는 노트 생성하지 않음",
     en: "Do not create notes on Sat/Sun",
-  },
-  setAutoLoadName: { ko: "실행 시 자동 catch-up", en: "Auto catch-up on load" },
-  setAutoLoadDesc: {
-    ko: "옵시디언 시작 시 마지막 실행 이후 놓친 날짜를 자동 처리",
-    en: "On Obsidian launch, auto-process missed business days since last run",
-  },
-  setMaxCatchupName: { ko: "Catch-up 최대 일수", en: "Max catch-up days" },
-  setMaxCatchupDesc: {
-    ko: "이 값보다 오래 옵시디언을 안 켰다가 켜면 그 이후 날짜만 처리 (기본 14)",
-    en: "If closed longer than this many days, only process today (default 14)",
   },
 } as const;
 

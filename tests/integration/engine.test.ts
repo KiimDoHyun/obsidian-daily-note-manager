@@ -8,36 +8,15 @@ import { CARRYOVER_SEPARATOR } from "../../src/engine/constants";
 import { fromIsoDate, toIsoDate } from "../../src/engine/dateutil";
 import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
-import { makeDailyNoteMd, makeLegacyDailyNoteMd, makeSettings } from "../helpers/fixtures";
+import { carriedNames, makeDailyNoteMd, makeLegacyDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import type { DailyNoteSettings } from "../../src/settings";
-
-/**
- * Engine 은 내부에서 todayDate() 를 호출한다. 테스트 결정성을 위해 시스템 시각을 고정.
- */
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch for test determinism
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
+import { withFixedToday } from "../helpers/fixedDate";
 
 function makeEngine(
   vault: InMemoryVault,
   settings?: Partial<DailyNoteSettings>,
 ): { engine: Engine; settings: DailyNoteSettings } {
-  const s = makeSettings({ autoRunOnLoad: false, ...(settings ?? {}) });
+  const s = makeSettings({ ...(settings ?? {}) });
   const saved: DailyNoteSettings[] = [];
   const engine = new Engine(
     vault,
@@ -114,7 +93,7 @@ describe("Engine.createForToday — 시나리오", () => {
       );
       await engine.createForToday();
       const todayMd = vault.peek(dailyNotePath(fromIsoDate("2026-09-15"), settings))!;
-      expect(todayMd).not.toContain("Old task");
+      expect(carriedNames(todayMd).some((n) => n.includes("Old task"))).toBe(false);
       // 어제(9/14) 가 속한 달의 드롭 문서에 기록
       const dropPath = "Notes/2026-09/2026-09 드롭.md";
       expect(vault.exists(dropPath)).toBe(true);
@@ -725,7 +704,7 @@ describe("Engine 상단 요약 재계산", () => {
 
 // MUST 4 — lastRunDate 갱신 규칙
 // 정책: 성공 생성일 때만 lastRunDate 를 갱신. 주말/기존파일 스킵 경로에서는 갱신하지 않음.
-// 이 규칙이 무너지면 catchUp 이 잘못된 마지막-실행일 기준으로 동작해 놓친 날짜가 생길 수 있음.
+// 이 규칙이 무너지면 이전 노트 탐색이 잘못된 마지막-실행일 기준으로 동작해 이어받을 노트를 놓칠 수 있음.
 describe("Engine.createForToday — lastRunDate 갱신 규칙", () => {
   it("성공 생성 → lastRunDate 를 today 로 갱신", async () => {
     const vault = new InMemoryVault();
@@ -766,10 +745,10 @@ describe("Engine.createForToday — lastRunDate 갱신 규칙", () => {
 });
 
 // MUST 5 — 이전 노트 탐색 폴백 (findPreviousNote)
-// 정책: 어제(previousBusinessDay) 가 없으면 today-1..today-maxCatchUpDays 를 거슬러 탐색.
+// 정책: 어제(previousBusinessDay) 가 없으면 마지막 실행일(없으면 14일 전)까지 거슬러 탐색.
 // 폴백 결과 origin 날짜가 이월 태그의 "MM-DD~" 로 남으므로, 여기가 뚫리면 이월 계산이 어긋남.
 describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
-  it("어제(금)가 없으면 그저께(목) 노트를 찾아 origin 으로 사용", async () => {
+  it("어제(금)가 없으면 그저께(목) 노트를 찾아 이어받고, 금·월 2일을 센다", async () => {
     // today = 2026-09-21 (Mon). 지난 금(18) 없음, 목(17) 있음.
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-21", async () => {
@@ -780,21 +759,20 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
-      // origin 은 09-17 로 잡히고 새 이월로 1일째로 표시.
-      expect(today).toContain("- [ ] Thu task (⏰ 1일째 이월, 09-17~)");
+      // origin 은 09-17. 노트가 없던 금요일도 하루로 센다.
+      expect(today).toContain("- [ ] Thu task (⏰ 2일째 이월, 09-17~)");
     });
   });
 
-  it("maxCatchUpDays 범위를 넘는 오래된 노트는 무시 → 이월 없이 새 노트 생성", async () => {
-    // today = 2026-09-21 (Mon). maxCatchUpDays=3.
-    // 후보: 09-20(Sun 스킵), 09-19(Sat 스킵), 09-18(Fri) → 미존재. 그 이상은 안 봄.
+  it("첫 실행(lastRunDate 없음): 14일보다 오래된 노트는 무시 → 이월 없이 새 노트 생성", async () => {
+    // today = 2026-09-21 (Mon). 마지막 실행 기록이 없으면 14일 전까지만 찾아본다.
     const vault = new InMemoryVault();
     await withFixedToday("2026-09-21", async () => {
-      const { engine, settings } = makeEngine(vault, { maxCatchUpDays: 3 });
-      // 7일 전 노트만 시드.
+      const { engine, settings } = makeEngine(vault);
+      // 17일 전 노트만 시드.
       vault.seed(
-        dailyNotePath(fromIsoDate("2026-09-14"), settings),
-        makeDailyNoteMd({ date: "2026-09-14", activeLines: ["- [ ] very old task"] }),
+        dailyNotePath(fromIsoDate("2026-09-04"), settings),
+        makeDailyNoteMd({ date: "2026-09-04", activeLines: ["- [ ] very old task"] }),
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-21"), settings))!;
@@ -804,7 +782,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
     });
   });
 
-  it("주말은 폴백 탐색에서 건너뜀 (skipWeekend=true)", async () => {
+  it("주말은 폴백 탐색·일수 계산에서 건너뜀 (skipWeekend=true, 금 → 화 = 월·화 2일)", async () => {
     // today = 2026-09-22 (Tue). 어제(월 21) 없음. 폴백:
     //   i=1: 09-21 Mon 존재 안 → 통과 (isWeekend 아님)
     //   i=2: 09-20 Sun → skipWeekend true 로 continue
@@ -819,7 +797,7 @@ describe("Engine.createForToday — 이전 노트 폴백 탐색", () => {
       );
       await engine.createForToday();
       const today = vault.peek(dailyNotePath(fromIsoDate("2026-09-22"), settings))!;
-      expect(today).toContain("- [ ] Fri task (⏰ 1일째 이월, 09-18~)");
+      expect(today).toContain("- [ ] Fri task (⏰ 2일째 이월, 09-18~)");
     });
   });
 });

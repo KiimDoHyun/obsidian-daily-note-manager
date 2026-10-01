@@ -2,6 +2,7 @@ import {
   CARRYOVER_SEPARATOR,
   CARRYOVER_TAG_MARKER,
   DROP_WARNING_TEXT,
+  DROPPED_TODAY_TITLE,
   FOOTER_TEMPLATE,
   SECTION_CARRYOVER_NEW,
   SECTION_MEMO,
@@ -9,15 +10,17 @@ import {
   WARN_ORANGE,
   WARN_RED,
 } from "../constants";
-import { mmddOf, toIsoDate } from "../dateutil";
+import { mmddOf, toIsoDate, ymOf } from "../dateutil";
 import { monthlyDropWikilink, monthlySummaryWikilink } from "../paths";
-import type { TaskBlock } from "../types";
+import type { DatedEvent, TaskBlock } from "../types";
 import type { DailyNoteSettings } from "../../settings";
 
 export function renderDailyNote(
   today: Date,
   carryingOver: TaskBlock[],
   settings: DailyNoteSettings,
+  /** 이번 실행에서 자동 드롭된 항목. date 는 드롭 직전 마지막으로 노트에 있었던 날. */
+  autoDropped: Pick<DatedEvent, "block" | "date">[] = [],
 ): string {
   const sorted = [...carryingOver].sort((a, b) => b.carryoverDays - a.carryoverDays);
   const warnOrange = Math.max(1, settings.dropThresholdDays - settings.warnOrangeDaysBeforeDrop);
@@ -34,7 +37,8 @@ export function renderDailyNote(
     }, [])
     .join("\n");
   const footer = FOOTER_TEMPLATE.replace("{summary_link}", monthlySummaryWikilink(today, settings))
-    .replace("{drop_link}", monthlyDropWikilink(today, settings));
+    .replace("{drop_link}", monthlyDropWikilink(today, settings))
+    .replace("{drop_days}", String(settings.dropThresholdDays));
 
   const parts: string[] = [
     "---",
@@ -58,7 +62,35 @@ export function renderDailyNote(
   // 없으면 blockquote 바로 다음에 memo 헤더 앞 구조적 blank 만 들어가도록.
   if (carryBody) parts.push("", carryBody);
   parts.push("", SECTION_MEMO, "", "", footer, "");
+  // 오늘 드롭된 업무는 참고용이라 노트 최하단에 둔다. 빈 줄 없이 `---` 를 붙이면 마크다운이
+  // 바로 윗줄(링크 줄)을 제목으로 바꿔 버리므로 위의 "" 가 반드시 필요하다.
+  if (autoDropped.length > 0) parts.push("---", ...renderDroppedToday(autoDropped, settings), "");
   return parts.join("\n");
+}
+
+function renderDroppedToday(
+  items: Pick<DatedEvent, "block" | "date">[],
+  settings: DailyNoteSettings,
+): string[] {
+  const sorted = [...items].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const months: Date[] = [];
+  for (const { date } of sorted) {
+    if (!months.some((m) => ymOf(m) === ymOf(date))) months.push(date);
+  }
+  const links = months.map((m) => monthlyDropWikilink(m, settings)).join(" · ");
+  const title =
+    `**${DROPPED_TODAY_TITLE} ${sorted.length}건** ` +
+    `(이월 ${settings.dropThresholdDays}일째 도달 · ${links})`;
+  // 체크박스가 아닌 점 목록: 눌러서 처리할 할 일로 오해하지 않게 하고, 파서가 읽을 일도 없다.
+  // 항목 이름이 `[ ]` 처럼 대괄호로 시작하면 점 목록이 체크박스로 렌더되므로 대괄호를 이스케이프한다.
+  // 날짜는 마지막으로 노트에 남아 있던 날이라 "~까지 이월 후 드롭" 으로 적는다(제목의 "오늘" 과
+  // 헷갈리지 않게). 일수는 주말 제외 설정에 따라 영업일·달력일이 섞이므로 "일" 로만 적는다.
+  const lines = sorted.map(({ block, date }) => {
+    const name = block.topText.startsWith("[") ? `\\${block.topText}` : block.topText;
+    const origin = block.originDate ? `${mmddOf(block.originDate)} 시작, ` : "";
+    return `- ${name} (${origin}${mmddOf(date)}까지 ${block.carryoverDays}일 이월 후 드롭)`;
+  });
+  return [title, ...lines];
 }
 
 function renderSingleBlock(block: TaskBlock, warnOrange: number, warnRed: number): string[] {

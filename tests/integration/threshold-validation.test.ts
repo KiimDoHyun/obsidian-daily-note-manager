@@ -19,12 +19,13 @@ import { dailyNotePath } from "../../src/engine/paths";
 import { InMemoryVault } from "../helpers/inMemoryVault";
 import { makeDailyNoteMd, makeSettings } from "../helpers/fixtures";
 import * as obsidian from "obsidian";
+import { withFixedToday } from "../helpers/fixedDate";
 
 /**
  * Notice 는 new 로만 호출되는 클래스. vi.spyOn 은 함수로 갈아치우면서 constructor 호환성이
  * 깨지므로, mockImplementation 으로 아무 필드 없는 인스턴스를 반환하게 감싼다.
  */
-function spyNoticeCtor(): ReturnType<typeof vi.spyOn> {
+function spyNoticeCtor() {
   return vi.spyOn(obsidian, "Notice").mockImplementation(
     // @ts-expect-error 반환 타입은 Notice 지만 테스트에서는 참조 안 함
     (_msg: string) => ({}),
@@ -61,7 +62,7 @@ function makeTestPlugin(): {
 describe("plugin.saveData — 무효 조합 저장 시 자동 정정", () => {
   let plugin: DailyNoteManagerPlugin;
   let persistSpy: ReturnType<typeof vi.fn>;
-  let noticeSpy: ReturnType<typeof vi.spyOn>;
+  let noticeSpy: ReturnType<typeof spyNoticeCtor>;
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -136,25 +137,6 @@ describe("plugin.saveData — 무효 조합 저장 시 자동 정정", () => {
   });
 });
 
-function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
-  const orig = Date;
-  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
-  const target = new orig(y, m - 1, d).getTime();
-  // @ts-expect-error monkey patch
-  globalThis.Date = class extends orig {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(target);
-      else super(...(args as ConstructorParameters<typeof orig>));
-    }
-    static now() {
-      return target;
-    }
-  };
-  return Promise.resolve(fn()).finally(() => {
-    globalThis.Date = orig;
-  });
-}
-
 describe("정정된 값이 엔진 경고 로직에서 정상 작동", () => {
   it("리셋 후 값(drop=5, orange=2, red=1) → 5일 이월 태스크가 3일째 🟠, 4일째 🔴 로 뜬다", async () => {
     // 사용자가 무효 조합을 저장해 트리거된 리셋 후 상태를 재현
@@ -162,7 +144,6 @@ describe("정정된 값이 엔진 경고 로직에서 정상 작동", () => {
       dropThresholdDays: 2,
       warnOrangeDaysBeforeDrop: 2,
       warnRedDaysBeforeDrop: 1,
-      autoRunOnLoad: false,
     });
     const result = validateAndFixThresholds(settings);
     expect(result).toEqual({ fixed: true, resetDrop: true });

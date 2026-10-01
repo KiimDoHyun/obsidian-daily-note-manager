@@ -13,9 +13,20 @@ export function normalizePath(p: string): string {
 
 export class App {}
 export class Plugin {
+  app: App;
+  constructor(app?: App, _manifest?: unknown) {
+    this.app = app as App;
+  }
   async saveData(_data: unknown): Promise<void> {}
   async loadData(): Promise<unknown> {
     return null;
+  }
+  addSettingTab(_tab: unknown): void {}
+  addCommand(_cmd: unknown): void {}
+  registerView(_type: string, _factory: unknown): void {}
+  addRibbonIcon(_icon: string, _title: string, _cb: unknown): void {}
+  registerInterval(id: number): number {
+    return id;
   }
 }
 export class ItemView {}

@@ -91,7 +91,7 @@ Notes/
 ## When it runs
 
 - While Obsidian is open: checks every 60 seconds whether today's note exists
-- After a gap (Obsidian was closed for days): catches up by processing missed business days in order, up to 14 by default
+- After a gap (Obsidian was closed for days): only today's note is created — no notes for the days in between. Carryover counts and drops are still calculated as if a note had existed for every business day in the gap, and the last note is always picked up no matter how long ago it was
 
 ## Install
 
@@ -117,7 +117,6 @@ Under Settings → Community plugins → Daily Note Manager:
 - 🟠 warning starts N business days before drop (default 2 → two days before drop)
   - Offsets scale with the drop threshold: if you change drop to 7, warnings shift to day 5/6 automatically
 - Skip weekend on/off
-- Max catch-up days on app load (default 14)
 - **Language / 언어** — UI language (ribbon, commands, notices, settings labels, timeline view). Note file contents (section headers, carryover suffixes, monthly summary, etc.) always stay in Korean format regardless of this setting.
 
 ## Commands
@@ -243,7 +242,7 @@ Notes/
 ## 언제 실행되나
 
 - 옵시디언 실행 중: 60초마다 오늘 노트 존재 여부 확인
-- 며칠 만에 다시 열었을 때: 마지막 실행일부터 오늘까지 놓친 영업일을 순서대로 처리 (기본 최대 14일)
+- 며칠 만에 다시 열었을 때: 그 사이 날짜의 노트는 만들지 않고 오늘 노트만 생성. 이월 일수와 드롭은 그 사이 영업일마다 노트가 있었던 것처럼 계산하며, 마지막 노트는 얼마나 오래됐든 이어받음
 
 ## 설치
 
@@ -269,7 +268,6 @@ Notes/
 - 🟠 경고 시작: 드롭 N일 전 (기본 2 → 드롭 이틀 전)
   - 드롭 임계일이 변경되면 경고 시점도 자동으로 따라감 (드롭 7일이면 5·6일째부터 경고)
 - 주말 스킵 여부
-- 앱 로드 시 catch-up 최대 일수 (기본 14일)
 - **언어 / Language** — UI(리본·명령·알림·설정 라벨·타임라인 뷰) 언어. 노트 파일 내용(섹션 헤더·이월 접미사·월간 종합 등)은 이 설정과 무관하게 항상 한국어 포맷.
 
 ## 명령어
