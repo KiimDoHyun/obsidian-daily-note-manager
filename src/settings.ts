@@ -13,9 +13,7 @@ export interface DailyNoteSettings {
   monthlySummarySuffix: string;
   monthlyDropSuffix: string;
   lastRunDate: string | null;
-  autoRunOnLoad: boolean;
   skipWeekend: boolean;
-  maxCatchUpDays: number;
   /** UI 언어. auto 는 navigator.language 로 감지. */
   language: LocaleSetting;
   /** 타임라인 뷰 좌측 라벨 컬럼 폭 (px). 사용자가 드래그로 변경 가능. */
@@ -31,9 +29,7 @@ export const DEFAULT_SETTINGS: DailyNoteSettings = {
   monthlySummarySuffix: "종합",
   monthlyDropSuffix: "드롭",
   lastRunDate: null,
-  autoRunOnLoad: true,
   skipWeekend: true,
-  maxCatchUpDays: 14,
   language: "auto",
   timelineLabelWidth: 220,
 };
@@ -73,10 +69,6 @@ export class DailyNoteSettingTab extends PluginSettingTab {
         control: { type: "text" as const, key: "monthlyDropSuffix", placeholder: "드롭" } },
       { name: t("setSkipWeekendName", lc), desc: t("setSkipWeekendDesc", lc),
         control: { type: "toggle" as const, key: "skipWeekend" } },
-      { name: t("setAutoLoadName", lc), desc: t("setAutoLoadDesc", lc),
-        control: { type: "toggle" as const, key: "autoRunOnLoad" } },
-      { name: t("setMaxCatchupName", lc), desc: t("setMaxCatchupDesc", lc),
-        control: { type: "number" as const, key: "maxCatchUpDays", min: 1 } },
       { name: t("setLangName", lc), desc: t("setLangDesc", lc),
         control: {
           type: "dropdown" as const,
@@ -197,31 +189,6 @@ export class DailyNoteSettingTab extends PluginSettingTab {
           this.plugin.settings.skipWeekend = v;
           await this.plugin.saveSettings();
         }),
-      );
-
-    new Setting(containerEl)
-      .setName(t("setAutoLoadName", lc))
-      .setDesc(t("setAutoLoadDesc", lc))
-      .addToggle((tg) =>
-        tg.setValue(this.plugin.settings.autoRunOnLoad).onChange(async (v) => {
-          this.plugin.settings.autoRunOnLoad = v;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName(t("setMaxCatchupName", lc))
-      .setDesc(t("setMaxCatchupDesc", lc))
-      .addText((text) =>
-        text
-          .setValue(String(this.plugin.settings.maxCatchUpDays))
-          .onChange(async (value) => {
-            const n = parseInt(value, 10);
-            if (Number.isFinite(n) && n > 0) {
-              this.plugin.settings.maxCatchUpDays = n;
-              await this.plugin.saveSettings();
-            }
-          }),
       );
 
     new Setting(containerEl)

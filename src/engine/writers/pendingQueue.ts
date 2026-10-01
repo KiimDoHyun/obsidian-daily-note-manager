@@ -2,7 +2,9 @@ import type { DailyNoteSettings } from "../../settings";
 import { fromIsoDate, toIsoDate } from "../dateutil";
 import type { TaskBlock } from "../types";
 import type { VaultLike } from "../vault";
-import { appendEvent, type SummaryEventType } from "./monthlySummary";
+import { appendArchived, ensureArchive } from "./archive";
+import { appendDropped, ensureDrop } from "./monthlyDrop";
+import { appendEvent, ensureSummary, type SummaryEventType } from "./monthlySummary";
 
 /**
  * 월간 종합·드롭·보관 문서 쓰기가 실패했을 때 이벤트를 임시 보관하는 대기열.
@@ -21,9 +23,20 @@ const QUEUE_FILE_BASENAME = "_대기 완료 로그.md";
 const CODE_FENCE_START = "```queue";
 const CODE_FENCE_END = "```";
 
+/**
+ * 이벤트를 써야 했던 문서 종류.
+ * - summary: 월간 종합 (완료·드롭·보관 로그 한 줄)
+ * - drop: 월간 드롭 문서 (항목 + 하위 메모 원본)
+ * - archive: 보관함 (항목 + 하위 메모 원본)
+ */
+export type PendingTarget = "summary" | "drop" | "archive";
+
 export interface PendingEntry {
   eventType: SummaryEventType;
   eventDate: string; // ISO YYYY-MM-DD
+  /** 대상 문서 종류. 예전 큐 파일엔 없으므로 읽을 때 없으면 summary 로 본다. */
+  target: PendingTarget;
+  /** 대상 문서 경로. 직렬화 호환을 위해 이름은 예전 그대로 유지(드롭·보관 문서 경로도 여기에 담는다). */
   targetSummaryPath: string;
   block: TaskBlock;
 }
@@ -86,13 +99,7 @@ export async function drainQueue(
   let drained = 0;
   for (const entry of entries) {
     try {
-      await appendEvent(
-        entry.targetSummaryPath,
-        entry.eventType,
-        fromIsoDate(entry.eventDate),
-        entry.block,
-        vault,
-      );
+      await replayEntry(entry, vault, settings);
       drained++;
     } catch (err) {
       console.warn(
@@ -107,6 +114,38 @@ export async function drainQueue(
   }
   await writeQueue(survivors, vault, settings);
   return { drained, remaining: survivors.length };
+}
+
+async function replayEntry(
+  entry: PendingEntry,
+  vault: VaultLike,
+  settings: DailyNoteSettings,
+): Promise<void> {
+  const date = fromIsoDate(entry.eventDate);
+  // 대상 문서가 아예 없으면 새로 만든다. 설정이 바뀌어 경로가 달라졌다면 현재 설정의 경로로 간다.
+  switch (entry.target) {
+    case "summary": {
+      const path = vault.exists(entry.targetSummaryPath)
+        ? entry.targetSummaryPath
+        : await ensureSummary(date, vault, settings);
+      await appendEvent(path, entry.eventType, date, entry.block, vault);
+      return;
+    }
+    case "drop": {
+      const path = vault.exists(entry.targetSummaryPath)
+        ? entry.targetSummaryPath
+        : await ensureDrop(date, vault, settings);
+      await appendDropped(path, date, entry.block, vault);
+      return;
+    }
+    case "archive": {
+      const path = vault.exists(entry.targetSummaryPath)
+        ? entry.targetSummaryPath
+        : await ensureArchive(vault, settings);
+      await appendArchived(path, date, entry.block, vault);
+      return;
+    }
+  }
 }
 
 // ---------- 직렬화 ----------
@@ -143,7 +182,7 @@ function renderQueueFile(entries: PendingEntry[]): string {
 }
 
 function renderHumanLine(entry: PendingEntry): string {
-  const label = eventLabelKo(entry.eventType);
+  const label = `${eventLabelKo(entry.eventType)}${targetLabelKo(entry.target)}`;
   const path = entry.targetSummaryPath;
   const text = entry.block.topText;
   return `- [${entry.eventDate}] ${label} — ${text} → \`${path}\``;
@@ -160,10 +199,22 @@ function eventLabelKo(t: SummaryEventType): string {
   }
 }
 
+function targetLabelKo(t: PendingTarget): string {
+  switch (t) {
+    case "summary":
+      return "";
+    case "drop":
+      return " (드롭 문서)";
+    case "archive":
+      return " (보관함)";
+  }
+}
+
 function serializeEntry(entry: PendingEntry): string {
   return JSON.stringify({
     eventType: entry.eventType,
     eventDate: entry.eventDate,
+    target: entry.target,
     targetSummaryPath: entry.targetSummaryPath,
     block: serializeBlock(entry.block),
   });
@@ -232,6 +283,7 @@ function tryParseEntry(line: string): PendingEntry | null {
     const obj = JSON.parse(line) as {
       eventType?: SummaryEventType;
       eventDate?: string;
+      target?: string;
       targetSummaryPath?: string;
       block?: SerializedBlock;
     };
@@ -239,9 +291,12 @@ function tryParseEntry(line: string): PendingEntry | null {
     if (!obj.eventType || !obj.eventDate || !obj.targetSummaryPath || !obj.block) return null;
     if (!isValidType(obj.eventType)) return null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(obj.eventDate)) return null;
+    const target = obj.target ?? "summary";
+    if (!isValidTarget(target)) return null;
     return {
       eventType: obj.eventType,
       eventDate: obj.eventDate,
+      target,
       targetSummaryPath: obj.targetSummaryPath,
       block: deserializeBlock(obj.block),
     };
@@ -252,4 +307,8 @@ function tryParseEntry(line: string): PendingEntry | null {
 
 function isValidType(t: string): t is SummaryEventType {
   return t === "completed" || t === "dropped" || t === "archived";
+}
+
+function isValidTarget(t: string): t is PendingTarget {
+  return t === "summary" || t === "drop" || t === "archive";
 }

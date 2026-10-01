@@ -7,7 +7,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Engine } from "../../src/engine";
 import { fromIsoDate } from "../../src/engine/dateutil";
-import { dailyNotePath, monthlySummaryPath } from "../../src/engine/paths";
+import {
+  archivePath,
+  dailyNotePath,
+  monthlyDropPath,
+  monthlySummaryPath,
+} from "../../src/engine/paths";
 import {
   pendingQueuePath,
   readQueue,
@@ -39,7 +44,7 @@ function makeEngine(
   vault: InMemoryVault,
   settings?: Partial<DailyNoteSettings>,
 ): { engine: Engine; settings: DailyNoteSettings } {
-  const s = makeSettings({ autoRunOnLoad: false, ...(settings ?? {}) });
+  const s = makeSettings({ ...(settings ?? {}) });
   const engine = new Engine(
     vault,
     s,
@@ -288,7 +293,8 @@ describe("대기 큐 — 통합 시나리오", () => {
     const sep = monthlySummaryPath(fromIsoDate("2026-09-30"), settings);
     const oct = monthlySummaryPath(fromIsoDate("2026-10-01"), settings);
 
-    // 09월만 정상 시드, 10월은 파일 없음.
+    // 09월만 정상 시드, 10월은 구조가 깨진 문서(주차 섹션 없음).
+    vault.seed(oct, "# 사용자가 구조를 지운 10월 종합\n");
     vault.seed(
       sep,
       [
@@ -330,14 +336,13 @@ describe("대기 큐 — 통합 시나리오", () => {
     expect(remaining[0].block.topText).toBe("10월 항목");
   });
 
-  it("catchUp: 3일 놓친 상황에서 큐가 있어도 모두 시도된다", async () => {
+  it("runDaily: 며칠 비웠다 돌아와도 큐가 소진되고 오늘 노트가 생긴다", async () => {
     // 준비: 09-11(금) lastRunDate, 09-14(월) 노트 시드, today = 09-16(수)
     await withFixedToday("2026-09-16", async () => {
       const { engine, settings } = makeEngine(vault, {
         lastRunDate: "2026-09-11",
-        autoRunOnLoad: true,
       });
-      // 09-11 노트 시드 (source of catchUp 시작점 데이터)
+      // 09-11 노트 시드 (마지막으로 실행한 날의 노트)
       vault.seed(
         dailyNotePath(fromIsoDate("2026-09-11"), settings),
         makeDailyNoteMd({ date: "2026-09-11", activeLines: ["- [ ] 이월 항목"] }),
@@ -381,12 +386,12 @@ describe("대기 큐 — 통합 시나리오", () => {
       ].join("\n");
       vault.seed(pendingQueuePath(settings), queueContent);
 
-      await engine.catchUp();
+      await engine.runDaily();
 
       // 큐가 소진되어 파일이 사라졌는지
       expect(vault.exists(pendingQueuePath(settings))).toBe(false);
-      // catchUp 이 목표 날짜(14, 15, 16) 노트를 생성했는지
-      expect(vault.exists(dailyNotePath(fromIsoDate("2026-09-14"), settings))).toBe(true);
+      // 그 사이(14, 15) 노트는 만들지 않고 오늘(16) 노트만 만든다.
+      expect(vault.exists(dailyNotePath(fromIsoDate("2026-09-14"), settings))).toBe(false);
       expect(vault.exists(dailyNotePath(fromIsoDate("2026-09-16"), settings))).toBe(true);
       // 종합에 오래된 완료가 기록됐는지
       const summary = vault.peek(summaryPath)!;
@@ -400,7 +405,8 @@ describe("대기 큐 — 통합 시나리오", () => {
     const empty = await engine.drainPendingQueue();
     expect(empty).toEqual({ drained: 0, remaining: 0 });
 
-    // 회복 불가 항목 하나
+    // 회복 불가 항목 하나 (대상 문서 구조가 깨져 있음)
+    vault.seed("Notes/nowhere.md", "# 구조 없음\n");
     const queueContent = [
       "```queue",
       `{"eventType":"completed","eventDate":"2026-09-15","targetSummaryPath":"Notes/nowhere.md","block":{"topText":"X","children":[],"isCompleted":true,"isDroppedImmediate":false,"hasArchiveMarker":false,"hasLongMarker":false,"carryoverDays":0,"originDate":null}}`,
@@ -456,5 +462,83 @@ describe("대기 큐 — 통합 시나리오", () => {
       expect(md).toContain("[!warning] 이 문서는 플러그인이 자동으로 관리합니다");
       expect(md).toContain("직접 편집하면 구조가 깨져");
     });
+  });
+});
+
+describe("대기 큐 — 보관함·드롭 문서 쓰기 실패도 대기열로", () => {
+  let vault: FailingVaultProxy;
+  beforeEach(() => {
+    vault = new FailingVaultProxy();
+  });
+
+  it("보관함 쓰기 실패 → 항목과 하위 메모가 대기열에 남고, 복구 후 보관함으로 옮겨진다", async () => {
+    const settings = makeSettings({});
+    const arc = archivePath(settings);
+    vault.seed(
+      dailyNotePath(fromIsoDate("2026-09-17"), settings),
+      makeDailyNoteMd({
+        date: "2026-09-17",
+        activeLines: ["- [ ] 나중에 볼 것 #보관", "\t- 중요한 하위 메모"],
+      }),
+    );
+    vault.failWritesTo(arc);
+
+    await withFixedToday("2026-09-18", async () => {
+      await new Engine(vault, settings, async () => {}).createForToday();
+    });
+
+    const queue = await readQueue(vault, settings);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].target).toBe("archive");
+    expect(queue[0].block.children).toEqual(["\t- 중요한 하위 메모"]);
+
+    vault.allowWritesTo(arc);
+    await withFixedToday("2026-09-21", async () => {
+      await new Engine(vault, settings, async () => {}).createForToday();
+    });
+
+    expect(vault.exists(pendingQueuePath(settings))).toBe(false);
+    const archive = vault.peek(arc)!;
+    expect(archive).toContain("- [ ] 나중에 볼 것 #보관 (보관: 09-17)");
+    expect(archive).toContain("\t- 중요한 하위 메모");
+  });
+
+  it("드롭 문서 쓰기 실패 → 대기열에 남고, 복구 후 드롭 문서로 옮겨진다", async () => {
+    const settings = makeSettings({});
+    const dropPath = monthlyDropPath(fromIsoDate("2026-09-17"), settings);
+    vault.seed(
+      dailyNotePath(fromIsoDate("2026-09-17"), settings),
+      makeDailyNoteMd({ date: "2026-09-17", activeLines: ["- [-] 안 할 일", "\t- 이유 메모"] }),
+    );
+    vault.failWritesTo(dropPath);
+
+    await withFixedToday("2026-09-18", async () => {
+      await new Engine(vault, settings, async () => {}).createForToday();
+    });
+    const queue = await readQueue(vault, settings);
+    expect(queue.map((e) => e.target)).toEqual(["drop"]);
+
+    vault.allowWritesTo(dropPath);
+    await withFixedToday("2026-09-21", async () => {
+      await new Engine(vault, settings, async () => {}).createForToday();
+    });
+    expect(vault.exists(pendingQueuePath(settings))).toBe(false);
+    const drop = vault.peek(dropPath)!;
+    expect(drop).toContain("- [-] 안 할 일 (09-17 즉시 드롭)");
+    expect(drop).toContain("\t- 이유 메모");
+  });
+
+  it("예전 형식(target 없음) 대기열 항목은 종합 문서 대상으로 읽힌다", async () => {
+    const settings = makeSettings();
+    vault.seed(
+      pendingQueuePath(settings),
+      [
+        "```queue",
+        `{"eventType":"completed","eventDate":"2026-09-11","targetSummaryPath":"Notes/2026-09/2026-09 종합.md","block":{"topText":"옛 항목","children":[],"isCompleted":true,"isDroppedImmediate":false,"hasArchiveMarker":false,"hasLongMarker":false,"carryoverDays":0,"originDate":null}}`,
+        "```",
+      ].join("\n"),
+    );
+    const queue = await readQueue(vault, settings);
+    expect(queue[0].target).toBe("summary");
   });
 });

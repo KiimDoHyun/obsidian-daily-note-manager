@@ -80,7 +80,7 @@ export function formatThresholdResetNotice(
     `현재: 드롭 ${settings.dropThresholdDays}일 / 주황 ${settings.warnOrangeDaysBeforeDrop}일 전 / 빨강 ${settings.warnRedDaysBeforeDrop}일 전`,
   ];
   if (resetDrop) {
-    lines.push("드롭 임계값도 기본값(5일)으로 함께 되돌렸습니다.");
+    lines.push(`드롭 임계값도 기본값(${DEFAULT_SETTINGS.dropThresholdDays}일)으로 함께 되돌렸습니다.`);
   }
   return lines.join("\n");
 }

@@ -444,3 +444,114 @@ describe("parser: 이월 origin 연도 해석", () => {
     expect(toIsoDate(p.carryoverBlocks[0].originDate!)).toBe("2025-12-30");
   });
 });
+
+describe("parser: 옵시디언이 체크박스로 인정하는 다른 표기", () => {
+  it("대문자 [X] 도 완료로 인식", () => {
+    const md = makeDailyNoteMd({ date: "2026-09-15", activeLines: ["- [ ] A", "- [X] B"] });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks.map((b) => [b.topText, b.isCompleted])).toEqual([
+      ["A", false],
+      ["B", true],
+    ]);
+  });
+
+  it("첫 줄의 [X] 도 사라지지 않는다", () => {
+    const md = makeDailyNoteMd({ date: "2026-09-15", activeLines: ["- [X] 첫줄 완료"] });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks).toHaveLength(1);
+    expect(p.activeBlocks[0].isCompleted).toBe(true);
+  });
+
+  it("`*`, `+` 목록 기호의 체크박스도 독립 항목", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      activeLines: ["- [ ] A", "* [ ] B", "+ [x] C"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks.map((b) => [b.topText, b.isCompleted, b.children])).toEqual([
+      ["A", false, []],
+      ["B", false, []],
+      ["C", true, []],
+    ]);
+  });
+
+  it("[/] 같은 그 밖의 상태 문자는 미완료 항목으로 독립 인식 (앞 항목 자식으로 흡수 안 됨)", () => {
+    const md = makeDailyNoteMd({ date: "2026-09-15", activeLines: ["- [ ] A", "- [/] 진행중"] });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks.map((b) => [b.topText, b.isCompleted, b.isDroppedImmediate])).toEqual([
+      ["A", false, false],
+      ["진행중", false, false],
+    ]);
+    expect(p.activeBlocks[0].children).toEqual([]);
+  });
+
+  it("편집기가 끝 공백을 지운 빈 체크박스 `- [ ]` 도 앞 항목 자식으로 흡수되지 않는다", () => {
+    const md = makeDailyNoteMd({ date: "2026-09-15", activeLines: ["- [ ] A", "- [ ]"] });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks[0].children).toEqual([]);
+  });
+});
+
+describe("parser: 이월 태그 뒤에 사용자가 덧붙인 글", () => {
+  it("태그 뒤 글을 덧붙여도 이월 일수·시작일을 읽고, 덧붙인 글은 항목 이름에 남긴다", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-17",
+      carryoverLines: ["- [ ] 보고서 (⏰ 4일째 이월, 09-11~) (🔴 드롭 예정입니다) 내일까지"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-17"));
+    const b = p.carryoverBlocks[0];
+    expect(b.topText).toBe("보고서 내일까지");
+    expect(b.carryoverDays).toBe(4);
+    expect(toIsoDate(b.originDate!)).toBe("2026-09-11");
+  });
+
+  it("시작일이 `??-??` 인 태그도 이월 일수를 읽는다", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-17",
+      carryoverLines: ["- [ ] 출처 모름 (⏰ 2일째 이월, ??-??~)"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-17"));
+    const b = p.carryoverBlocks[0];
+    expect(b.topText).toBe("출처 모름");
+    expect(b.carryoverDays).toBe(2);
+    expect(b.originDate).toBeNull();
+  });
+});
+
+describe("parser: 마커는 옵시디언 태그 단위로만 인식", () => {
+  it("#장기프로젝트·#보관함정리 처럼 뒤에 글자가 이어진 다른 태그는 마커가 아니다", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      activeLines: ["- [ ] A #장기프로젝트", "- [ ] B #보관함정리", "- [ ] C #장기_x", "- [ ] D #보관-1"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    for (const b of p.activeBlocks) {
+      expect([b.topText, b.hasLongMarker, b.hasArchiveMarker]).toEqual([b.topText, false, false]);
+    }
+  });
+
+  it("문장 중간·끝, 구두점 앞, 하위 태그(#장기/세부)는 마커로 인식", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-15",
+      activeLines: ["- [ ] #장기 앞에 붙음", "- [ ] 끝에 #보관.", "- [ ] 하위 #장기/연구"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-15"));
+    expect(p.activeBlocks.map((b) => [b.hasLongMarker, b.hasArchiveMarker])).toEqual([
+      [true, false],
+      [false, true],
+      [true, false],
+    ]);
+  });
+});
+
+describe("parser: 손으로 망가뜨린 이월 태그", () => {
+  it("없는 날짜(02-31)가 적힌 태그도 멈추지 않고 일수를 읽는다", () => {
+    const md = makeDailyNoteMd({
+      date: "2026-09-17",
+      carryoverLines: ["- [ ] 이상한 날짜 (⏰ 2일째 이월, 02-31~)"],
+    });
+    const p = parseDailyNoteText(md, fromIsoDate("2026-09-17"));
+    expect(p.carryoverBlocks[0].carryoverDays).toBe(2);
+  });
+});
+

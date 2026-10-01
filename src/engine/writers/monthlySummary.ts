@@ -68,10 +68,14 @@ export async function appendEvent(
   const raw = await vault.read(summaryPath);
   const lines = raw.split(/\r?\n/);
   const wk = weekOfMonth(eventDate);
-  const insertIdx = findInsertionIndex(lines, wk, eventType);
-  if (insertIdx === null) {
+  const found = findInsertionIndex(lines, wk, eventType, line);
+  if (found === null) {
     throw new Error(`Cannot find week ${wk} + ${eventType} section in ${summaryPath}`);
   }
+  // 같은 날짜·같은 항목 줄이 이미 있으면 다시 쓰지 않는다. 같은 날을 재생성하거나
+  // 대기열이 부분 성공 후 재시도돼도 기록이 두 번 쌓이지 않게 하는 멱등성 장치.
+  if (found.duplicate) return;
+  const insertIdx = found.index;
   lines.splice(insertIdx, 0, line);
   if (insertIdx + 1 < lines.length && /^(### |## )/.test(lines[insertIdx + 1])) {
     lines.splice(insertIdx + 1, 0, "");
@@ -83,17 +87,23 @@ function findInsertionIndex(
   lines: string[],
   wk: number,
   eventType: SummaryEventType,
-): number | null {
+  eventLine: string,
+): { index: number; duplicate: boolean } | null {
   const subsectionHeader = subsectionHeaderOf(eventType);
   let inWeek = false;
   let inSub = false;
   let subHeaderIdx: number | null = null;
   let lastEventIdx: number | null = null;
+  let duplicate = false;
+  const done = (boundaryIdx: number) => ({
+    index: resolveInsert(subHeaderIdx, lastEventIdx, boundaryIdx),
+    duplicate,
+  });
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const wm = WEEK_HEADER_RE.exec(line);
     if (wm) {
-      if (inSub) return resolveInsert(subHeaderIdx, lastEventIdx, i);
+      if (inSub) return done(i);
       inWeek = parseInt(wm[1], 10) === wk;
       inSub = false;
       subHeaderIdx = null;
@@ -101,7 +111,7 @@ function findInsertionIndex(
       continue;
     }
     if (inWeek && line.startsWith("### ")) {
-      if (inSub) return resolveInsert(subHeaderIdx, lastEventIdx, i);
+      if (inSub) return done(i);
       inSub = line === subsectionHeader;
       subHeaderIdx = inSub ? i : null;
       lastEventIdx = null;
@@ -109,9 +119,10 @@ function findInsertionIndex(
     }
     if (inSub && EVENT_LINE_RE.test(line)) {
       lastEventIdx = i;
+      if (line === eventLine) duplicate = true;
     }
   }
-  if (inSub) return resolveInsert(subHeaderIdx, lastEventIdx, lines.length);
+  if (inSub) return done(lines.length);
   return null;
 }
 

@@ -1,15 +1,20 @@
 import type { Plugin } from "obsidian";
-import type { Engine } from "./engine";
 import { today, toIsoDate } from "./engine/dateutil";
+
+/** 하루 실행(놓친 날 메우기 → 오늘 노트 생성)을 맡는 쪽. 보통 Engine, 플러그인에선 알림 래퍼. */
+export interface DailyRunner {
+  runDaily(): Promise<unknown>;
+}
 
 /**
  * 1분마다 오늘 날짜가 바뀌었는지 체크한다.
  * plugin.registerInterval 로 등록해서 unload 시 자동 정리.
+ * 노트 생성 진입점은 이 스케줄러 하나뿐이다. 시작 시 첫 tick 이 놓친 날과 오늘을 함께 처리한다.
  */
 export class Scheduler {
   private lastRunDate: string | null = null;
 
-  constructor(private engine: Engine, private plugin: Plugin) {}
+  constructor(private runner: DailyRunner, private plugin: Plugin) {}
 
   start() {
     void this.tick();
@@ -27,7 +32,7 @@ export class Scheduler {
     await this.flushOpenEditors();
 
     try {
-      await this.engine.createForToday();
+      await this.runner.runDaily();
       this.lastRunDate = todayIso;
     } catch (err) {
       console.error("[daily-note] scheduler tick failed", err);

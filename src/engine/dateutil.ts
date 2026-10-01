@@ -78,14 +78,26 @@ export function mmddOf(d: Date): string {
 
 /**
  * 이월 태그에서 파싱한 MM-DD 로 원본 연도를 유추.
- * 태그에는 연도가 없으므로 note_date 기준으로 판단:
- * 후보 > note_date 면 작년으로 간주.
+ * 태그에는 연도가 없으므로 note_date 기준으로 판단한다.
+ * N일째 이월이면 이월 한 번마다 최소 하루가 지났으므로 시작일은 note_date 보다 최소 N일 앞이다.
+ * 그 조건을 만족하는 가장 최근의 MM-DD 를 고른다. 1년 넘게 이월된 #장기 항목도 올바른 해가 나온다.
  */
-export function resolveOriginDate(noteDate: Date, mm: number, dd: number): Date {
-  const y = noteDate.getFullYear();
-  let candidate = new Date(y, mm - 1, dd);
-  if (candidate > noteDate) candidate = new Date(y - 1, mm - 1, dd);
-  return candidate;
+export function resolveOriginDate(
+  noteDate: Date,
+  mm: number,
+  dd: number,
+  carryoverDays: number = 0,
+): Date {
+  const latest = addDays(noteDate, -carryoverDays);
+  // 02-29 처럼 그해에 없는 날짜는 다음 달로 넘어가 버리므로(3월 1일) 그런 해는 건너뛴다.
+  // 사용자가 02-31 같은 존재하지 않는 날짜를 적으면 어느 해도 맞지 않으므로 최대 8년만 거슬러 본다
+  // (윤년 주기 4년의 두 배). 못 찾으면 예전 규칙(가장 최근의 같은 MM-DD)으로 돌아간다.
+  for (let y = latest.getFullYear(); y > latest.getFullYear() - 8; y--) {
+    const candidate = new Date(y, mm - 1, dd);
+    if (candidate <= latest && candidate.getMonth() === mm - 1) return candidate;
+  }
+  const fallback = new Date(noteDate.getFullYear(), mm - 1, dd);
+  return fallback > noteDate ? new Date(noteDate.getFullYear() - 1, mm - 1, dd) : fallback;
 }
 
 /** JS weekday: Sun=0..Sat=6 → 월요일 기반: Mon=0..Sun=6 */

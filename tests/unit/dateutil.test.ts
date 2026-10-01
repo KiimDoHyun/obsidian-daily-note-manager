@@ -184,6 +184,30 @@ describe("resolveOriginDate", () => {
   });
 });
 
+describe("resolveOriginDate — 이월 일수로 연도 결정 (1년 넘는 이월)", () => {
+  it("283일째인데 같은 해 09-01 은 겨우 30일 전 → 작년 09-01", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-10-01"), 9, 1, 283))).toBe("2025-09-01");
+  });
+
+  it("일수가 짧으면 기존과 같다 (5일째, 09-16 → 같은 해)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-09-21"), 9, 16, 3))).toBe("2026-09-16");
+  });
+
+  it("02-29 시작은 윤년으로만 해석 (2030-06-03, 300일째 → 2029년엔 02-29 가 없으니 2028-02-29)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2030-06-03"), 2, 29, 300))).toBe("2028-02-29");
+  });
+
+  it("어느 해에도 없는 날짜(02-31, 13-45)를 손으로 적어도 멈추지 않고 결과를 낸다", () => {
+    expect(resolveOriginDate(d("2026-10-01"), 2, 31, 5)).toBeInstanceOf(Date);
+    expect(resolveOriginDate(d("2026-10-01"), 13, 45, 5)).toBeInstanceOf(Date);
+  });
+
+  it("2년 넘게도 해석한다 (600일째, 09-01 → 2년 전)", () => {
+    expect(toIsoDate(resolveOriginDate(d("2026-10-01"), 9, 1, 600))).toBe("2024-09-01");
+  });
+});
+
+
 describe("sameYearMonth", () => {
   it("같은 년·월", () => {
     expect(sameYearMonth(d("2026-09-01"), d("2026-09-30"))).toBe(true);

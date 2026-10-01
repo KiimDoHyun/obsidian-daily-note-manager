@@ -39,6 +39,8 @@ export async function appendArchived(
   const groupEndIdx = findGroupEnd(lines, groupHeader);
   const md = mmddOf(eventDate);
   const entry = [`- [ ] ${block.topText} (보관: ${md})`, ...block.children];
+  // 같은 날짜에 보관된 같은 항목이 이미 있으면 다시 쓰지 않는다 (재생성·재시도 멱등성).
+  if (lines.includes(entry[0])) return;
 
   if (groupEndIdx === null) {
     while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();

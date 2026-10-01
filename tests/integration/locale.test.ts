@@ -30,7 +30,7 @@ function withFixedToday<T>(iso: string, fn: () => T | Promise<T>): Promise<T> {
 }
 
 function makeEngine(vault: InMemoryVault, override: Partial<DailyNoteSettings> = {}) {
-  const s = makeSettings({ autoRunOnLoad: false, ...override });
+  const s = makeSettings({ ...override });
   const engine = new Engine(vault, s, async () => {}, "test-vault");
   return { engine, settings: s };
 }

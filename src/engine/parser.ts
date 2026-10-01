@@ -19,7 +19,10 @@ import { resolveOriginDate } from "./dateutil";
 import type { DailyNoteParsed, TaskBlock } from "./types";
 import { makeBlock } from "./types";
 
-const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x-])\] (?<text>.*)$/;
+// 옵시디언은 `-`·`*`·`+` 목록 기호와 대괄호 안 아무 한 글자를 모두 체크박스로 렌더한다.
+//   - `x`/`X` → 완료, `-` → 즉시 드롭, 그 밖(공백, `/`, `>` 등) → 미완료.
+// 편집기가 끝 공백을 지운 빈 체크박스(`- [ ]`) 도 독립 항목으로 잡아 앞 항목 자식으로 흡수되지 않게 한다.
+const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?[-*+] \[(?<check>[^\[\]])\](?: (?<text>.*))?$/;
 
 // 드롭 경고 접미부는 두 포맷을 모두 인정한다.
 //   - 옛 포맷: `(드롭 예정입니다)`  (이모지는 라인 맨 앞)
@@ -28,9 +31,11 @@ const TOP_LEVEL_LINE_RE = /^(?<warn>🟠 |🔴 )?- \[(?<check>[ x-])\] (?<text>.
 //   - 최신: `(⏰ N일째 이월, ...)` — 별표 미사용, 사용자 텍스트 별표와 충돌 없음
 //   - 중간: `(**N일째** 이월, ...)` — 굵게, 짧게 존재했던 포맷
 //   - 옛: `(N일째 이월, ...)` — 최초 포맷
+// 시작일을 모를 때 라이터가 쓰는 `??-??` 도 인정한다.
+// 줄 끝에 고정하지 않는다. 사용자가 태그 뒤에 글을 덧붙여도 일수를 읽고, 덧붙인 글은 항목 이름에 남긴다.
 const CARRYOVER_TAG_RE = new RegExp(
   `\\s*\\((?:${CARRYOVER_TAG_MARKER} )?(?:\\*\\*)?(?<days>\\d+)일째(?:\\*\\*)? 이월, ` +
-    `(?<mm>\\d{2})-(?<dd>\\d{2})~\\)(\\s*\\((?:🟠 |🔴 )?드롭 예정입니다\\))?\\s*$`,
+    `(?:(?<mm>\\d{2})-(?<dd>\\d{2})|\\?\\?-\\?\\?)~\\)(\\s*\\((?:🟠 |🔴 )?드롭 예정입니다\\))?`,
 );
 
 export function parseDailyNoteText(text: string, noteDate: Date): DailyNoteParsed {
@@ -165,13 +170,25 @@ function isTopLevelLine(line: string): boolean {
   return TOP_LEVEL_LINE_RE.test(line);
 }
 
+// 옵시디언 태그는 글자·숫자·`_`·`-` 가 이어지는 한 하나의 태그다. `#장기프로젝트` 는 `#장기` 와 다른 태그.
+// `/` 는 하위 태그 구분자라 `#장기/연구` 는 `#장기` 의 하위로 보고 마커로 인정한다.
+function hasTag(text: string, tag: string): boolean {
+  let from = 0;
+  for (let i = text.indexOf(tag, from); i !== -1; i = text.indexOf(tag, from)) {
+    const next = text.charAt(i + tag.length);
+    if (!/[\p{L}\p{N}_-]/u.test(next)) return true;
+    from = i + tag.length;
+  }
+  return false;
+}
+
 function newBlockFromLine(line: string, noteDate: Date, isCarryover: boolean): TaskBlock {
   const m = TOP_LEVEL_LINE_RE.exec(line);
   if (!m || !m.groups) throw new Error(`unexpected top-level line: ${line}`);
   const check = m.groups.check;
-  let text = m.groups.text;
+  let text = m.groups.text ?? "";
 
-  const isCompleted = check === "x";
+  const isCompleted = check === "x" || check === "X";
   const isDroppedImmediate = check === "-";
 
   let carryoverDays = 0;
@@ -180,12 +197,24 @@ function newBlockFromLine(line: string, noteDate: Date, isCarryover: boolean): T
     const tag = CARRYOVER_TAG_RE.exec(text);
     if (tag && tag.groups) {
       carryoverDays = parseInt(tag.groups.days, 10);
-      originDate = resolveOriginDate(
-        noteDate,
-        parseInt(tag.groups.mm, 10),
-        parseInt(tag.groups.dd, 10),
-      );
-      text = text.substring(0, tag.index).replace(/\s+$/, "");
+      originDate =
+        tag.groups.mm === undefined
+          ? null
+          : resolveOriginDate(
+              noteDate,
+              parseInt(tag.groups.mm, 10),
+              parseInt(tag.groups.dd, 10),
+              carryoverDays,
+            );
+      // 태그 자리를 걷어내고 앞뒤 사용자 글을 이어 붙인다. 예전 버그로 태그가 겹쳐 쌓인 줄도
+      // 나머지 태그까지 걷어내 한 개로 수렴시킨다(일수는 첫 태그 기준).
+      const before = text.substring(0, tag.index).replace(/\s+$/, "");
+      let after = text.substring(tag.index + tag[0].length);
+      for (let extra = CARRYOVER_TAG_RE.exec(after); extra; extra = CARRYOVER_TAG_RE.exec(after)) {
+        after = after.substring(0, extra.index) + after.substring(extra.index + extra[0].length);
+      }
+      after = after.trim();
+      text = after ? `${before} ${after}` : before;
     }
   }
 
@@ -193,8 +222,8 @@ function newBlockFromLine(line: string, noteDate: Date, isCarryover: boolean): T
     topText: text,
     isCompleted,
     isDroppedImmediate,
-    hasArchiveMarker: text.includes(MARKER_ARCHIVE),
-    hasLongMarker: text.includes(MARKER_LONG),
+    hasArchiveMarker: hasTag(text, MARKER_ARCHIVE),
+    hasLongMarker: hasTag(text, MARKER_LONG),
     carryoverDays,
     originDate,
   });
